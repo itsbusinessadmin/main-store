@@ -34,11 +34,8 @@
 
       let lastErr;
       for (let attempt = 0; attempt <= retries; attempt++) {
-        const controller = signal ? null : new AbortController();
-        const requestSignal = signal || controller.signal;
-        const timer = controller ? setTimeout(() => controller.abort(), 12000) : null;
         try {
-          const res = await fetch(C.API_BASE + "/", { method: "POST", headers, body, signal: requestSignal });
+          const res = await fetch(C.API_BASE + "/", { method: "POST", headers, body, signal });
           let json;
           try { json = await res.json(); }
           catch { throw new ApiError("The server returned an unreadable response.", "BAD_JSON", res.status); }
@@ -48,17 +45,11 @@
           return json.data ?? json;
         } catch (e) {
           lastErr = e;
-          if (e instanceof ApiError) throw e;
-          if (e.name === "AbortError") {
-            if (signal) throw e;
-            if (attempt >= retries) throw new ApiError("The server took too long to respond. Please try again.", "TIMEOUT", 0);
-          }
+          if (e.name === "AbortError" || e instanceof ApiError) throw e;
           if (attempt < retries) await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
-        } finally {
-          if (timer) clearTimeout(timer);
         }
       }
-      throw new ApiError(lastErr?.message || "Can't reach the server. Check your connection and try again.", "NETWORK", 0);
+      throw new ApiError("Can't reach the server. Check your connection and try again.", "NETWORK", 0);
     },
 
     /* Cached GET for public storefront reads — lets the service worker serve them offline. */
