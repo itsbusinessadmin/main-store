@@ -1,6 +1,11 @@
 /* =========================================================================
-   Universal Store — Design System v2
+   Universal Store — Design System v2.1
    One stylesheet. Three apps. Mobile-first, fluid to desktop.
+
+   FIXED in v2.1 — desktop app shell grid placement.
+   Previously .main had no explicit grid placement, so on screens >=1024px it
+   was auto-placed into an implicit second row beneath the full-height sidebar,
+   pushing all admin/master content one viewport below the fold.
    ========================================================================= */
 
 :root{
@@ -213,10 +218,24 @@ ul{margin:0; padding:0; list-style:none}
 .uploader:hover,.uploader.drag{border-color:var(--brand); color:var(--brand); background:var(--brand-050)}
 .uploader img{margin:0 auto; max-height:150px; border-radius:var(--r-xs)}
 
-/* ---------- App shell (admin / master) ---------- */
-.shell{min-height:100dvh; display:grid; grid-template-rows:auto 1fr}
+/* =========================================================================
+   App shell (admin / master)  —  FIXED SECTION
+   Mobile: two rows stacked (topbar, main). Sidebar hidden, tabbar fixed.
+   Desktop: sidebar spans both rows in column 1; topbar row 1 col 2;
+            main row 2 col 2 — explicitly placed so it can never be
+            auto-flowed into an implicit row below the fold.
+   ========================================================================= */
+.shell{
+  min-height:100dvh;
+  display:grid;
+  grid-template-columns:1fr;
+  grid-template-rows:auto 1fr;
+}
 @media (min-width:1024px){
-  .shell{grid-template-columns:var(--sidebar-w) 1fr; grid-template-rows:1fr}
+  .shell{
+    grid-template-columns:var(--sidebar-w) 1fr;
+    grid-template-rows:auto 1fr;
+  }
 }
 
 .topbar{
@@ -224,8 +243,12 @@ ul{margin:0; padding:0; list-style:none}
   display:flex; align-items:center; gap:12px; padding-inline:var(--pad);
   background:color-mix(in srgb,var(--card) 88%,transparent);
   backdrop-filter:saturate(180%) blur(14px); border-bottom:1px solid var(--line);
+  grid-column:1; grid-row:1;
 }
-@media (min-width:1024px){ .topbar{grid-column:2} }
+@media (min-width:1024px){
+  .topbar{grid-column:2; grid-row:1}
+}
+
 .brandmark{display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:-.02em}
 .brandmark .logo{
   width:34px;height:34px;border-radius:10px;flex:0 0 auto;object-fit:cover;
@@ -237,7 +260,13 @@ ul{margin:0; padding:0; list-style:none}
   display:none; background:var(--card); border-right:1px solid var(--line);
   padding:20px 14px; position:sticky; top:0; height:100dvh; overflow-y:auto;
 }
-@media (min-width:1024px){ .sidebar{display:flex; flex-direction:column; gap:6px; grid-row:1} }
+@media (min-width:1024px){
+  .sidebar{
+    display:flex; flex-direction:column; gap:6px;
+    grid-column:1; grid-row:1 / span 2;
+  }
+}
+
 .nav-item{
   display:flex; align-items:center; gap:12px; min-height:var(--tap); padding:0 14px;
   border-radius:var(--r-sm); color:var(--muted); font-weight:600; transition:var(--t); width:100%;
@@ -248,8 +277,19 @@ ul{margin:0; padding:0; list-style:none}
 .nav-item[disabled]{opacity:.4; pointer-events:none}
 .nav-sep{margin:12px 8px 6px; font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-weight:700}
 
-.main{padding:var(--pad) var(--pad) calc(var(--nav-h) + 32px); min-width:0}
-@media (min-width:1024px){ .main{padding-bottom:48px; max-width:var(--maxw)} }
+.main{
+  padding:var(--pad) var(--pad) calc(var(--nav-h) + 32px);
+  min-width:0;
+  grid-column:1; grid-row:2;
+}
+@media (min-width:1024px){
+  .main{
+    grid-column:2; grid-row:2;
+    padding-bottom:48px;
+    max-width:var(--maxw);
+    width:100%;
+  }
+}
 
 .tabbar{
   position:fixed; inset:auto 0 0 0; z-index:45; display:flex; justify-content:space-around;
@@ -317,7 +357,7 @@ tbody tr:hover{background:var(--card-2)}
 
 /* ---------- Storefront ---------- */
 .store-hero{
-  background:var(--card); border-bottom:1px solid var(--line); padding:var(--pad) 0 12px;
+  border-bottom:1px solid var(--line); padding:var(--pad) 0 12px;
   position:sticky; top:0; z-index:35;
   backdrop-filter:saturate(180%) blur(14px);
   background:color-mix(in srgb,var(--card) 90%,transparent);
@@ -444,7 +484,7 @@ tbody tr:hover{background:var(--card-2)}
   position:fixed; inset:0; z-index:90; display:grid; place-items:center; background:var(--bg);
   transition:opacity 260ms ease, visibility 260ms;
 }
-.splash.gone{opacity:0; visibility:hidden}
+.splash.gone{opacity:0; visibility:hidden; pointer-events:none}
 .splash .inner{display:flex; flex-direction:column; align-items:center; gap:14px}
 .splash img{width:76px;height:76px;border-radius:22px;object-fit:cover;box-shadow:var(--shadow-lg)}
 .spinner{width:26px;height:26px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--brand);animation:spin .7s linear infinite}
