@@ -3,9 +3,9 @@
    Leave DEMO_MODE = true to run the whole app with an in-browser mock backend
    (no Worker, no D1, no KV needed) so you can design/test offline. */
 window.US_CONFIG = {
-  APP_NAME: "Universal Store",
-  API_BASE: "https://universal-store.YOUR-SUBDOMAIN.workers.dev",
-  DEMO_MODE: true,
+  APP_NAME: "main-store",
+  API_BASE: "https://main-store.YOUR-SUBDOMAIN.workers.dev",
+  DEMO_MODE: false,
   GOOGLE_CLIENT_ID: "YOUR_GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com",
   CURRENCY: "PHP",
   CURRENCY_SYMBOL: "\u20b1",
