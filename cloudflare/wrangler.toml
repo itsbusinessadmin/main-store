@@ -1,0 +1,17 @@
+name = "universal-store"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "universal-store"
+database_id = "5c2f51b8-3b2b-4074-926f-e66e2c47dc32"
+
+[[kv_namespaces]]
+binding = "FILES"
+id = "499cc96ee4294a109d5036921fdcd6b5"
+
+[vars]
+MASTER_ADMIN_EMAIL = "you@example.com"
+GOOGLE_CLIENT_ID = "YOUR_GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com"
+ALLOWED_ORIGINS = "*"
