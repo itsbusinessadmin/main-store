@@ -1,7 +1,14 @@
-/* Universal Store — Customer storefront (index.html).
-   Public, no login. Browse -> product modal (variants) -> cart drawer -> 3-step checkout. */
+/* Universal Store — Customer storefront (index.html)  v2.2
+   Public, no login. Browse -> product modal (variants) -> cart drawer -> 3-step checkout.
+
+   v2.2 fixes
+     - mount() everywhere (no stray "null" text)
+     - product photos / logos / QR codes routed through UI.img() so KV ids resolve
+     - cart stores the file id, not a raw src, so thumbs survive a reload
+*/
 (function () {
-  const { $, $$, el, money, dateFmt, store, theme, toast, modal, debounce, uid, fileToDataURL, copy, skeletons, empty } = UI;
+  const { $, $$, el, mount, img, imgFallback, imagePicker, fileSrc, dl, dlRow, money, dateFmt,
+          store, theme, toast, modal, debounce, uid, copy, skeletons, empty } = UI;
   const C = window.US_CONFIG;
 
   const params = new URLSearchParams(location.search);
@@ -12,6 +19,7 @@
     q: "", category: "", view: store.get("view", "grid"), cart: []
   };
   const cartKey = () => "cart:" + PUBLIC_ID;
+  const FF_LABEL = { delivery: "Delivery", pickup: "Pickup", meetup: "Meet-up" };
 
   /* ---------------- Boot ---------------- */
   async function boot() {
@@ -19,7 +27,10 @@
     $("#viewToggle").textContent = S.view === "grid" ? "\u2630" : "\u25A6";
     $("#products").dataset.view = S.view;
 
-    if (!PUBLIC_ID) return fatal("No store selected", "This link is missing its store code. Ask the seller for their storefront link \u2014 it should look like \u2026/index.html?store=SHOP-XXXX-XXXX-XXXX");
+    if (!PUBLIC_ID) {
+      return fatal("No store selected",
+        "This link is missing its store code. Ask the seller for their storefront link \u2014 it should look like \u2026/index.html?store=SHOP-XXXX-XXXX-XXXX");
+    }
 
     try {
       S.store = await api.getStore(PUBLIC_ID);
@@ -39,7 +50,7 @@
 
   function fatal(title, msg) {
     $("#splash").classList.add("gone");
-    $("#app").replaceChildren(el("div", { class: "wrap mt-lg" },
+    mount($("#app"), el("div", { class: "wrap mt-lg" },
       el("div", { class: "card" }, empty("\u{1F6D2}", title, msg))));
     $("#storeHeader").classList.add("hide");
   }
@@ -49,21 +60,27 @@
     theme.accent(S.store.accent_color);
     $("#storeName").textContent = S.store.business_name;
     $("#storeTagline").textContent = S.store.tagline || "";
+
+    const logoSrc = fileSrc(S.store.logo);
     const logo = $("#storeLogo");
-    if (S.store.logo) { logo.src = S.store.logo; logo.classList.remove("hide"); }
-    if (S.store.announcement) { $("#announce").textContent = S.store.announcement; $("#announce").classList.remove("hide"); }
-    $("#splashLogo").src = S.store.logo || "";
+    if (logoSrc) { logo.src = logoSrc; logo.classList.remove("hide"); }
+    const splashLogo = $("#splashLogo");
+    if (logoSrc) splashLogo.src = logoSrc; else splashLogo.style.display = "none";
+
+    if (S.store.announcement) {
+      $("#announce").textContent = S.store.announcement;
+      $("#announce").classList.remove("hide");
+    }
     $("#splashName").textContent = S.store.business_name;
   }
 
   function renderCategories() {
-    const host = $("#categories");
-    const cats = (S.store.categories || []).filter(c => !c.is_system || true);
-    host.replaceChildren(
+    mount($("#categories"),
       el("button", { class: "chip on", "data-cat": "", onclick: onCat }, "All"),
-      ...cats.map(c => el("button", { class: "chip", "data-cat": c.category_id, onclick: onCat }, c.name))
-    );
+      ...(S.store.categories || []).map(c =>
+        el("button", { class: "chip", "data-cat": c.category_id, onclick: onCat }, c.name)));
   }
+
   function onCat(e) {
     $$("#categories .chip").forEach(c => c.classList.remove("on"));
     e.currentTarget.classList.add("on");
@@ -76,44 +93,52 @@
     if (S.loading) return;
     S.loading = true;
     const host = $("#products");
-    if (reset) { S.offset = 0; S.hasMore = true; S.products = []; host.replaceChildren(...skeletons(8)); }
+    if (reset) { S.offset = 0; S.hasMore = true; S.products = []; mount(host, ...skeletons(8)); }
+
     try {
       const r = await api.listProducts({
         public_store_id: PUBLIC_ID, q: S.q, category_id: S.category,
         offset: S.offset, limit: C.PAGE_SIZE
       });
-      S.products.push(...r.items);
-      S.offset += r.items.length;
-      S.hasMore = r.has_more;
-      renderProducts(reset);
+      const before = S.products.length;
+      S.products.push(...(r.items || []));
+      S.offset += (r.items || []).length;
+      S.hasMore = !!r.has_more;
+      renderProducts(reset, reset ? 0 : before);
     } catch (e) {
-      host.replaceChildren(empty("\u26A0\uFE0F", "Couldn't load products", e.message));
+      mount(host, empty("\u26A0\uFE0F", "Couldn't load products", e.message));
     } finally { S.loading = false; }
   }
 
-  function renderProducts(reset) {
+  function renderProducts(reset, from) {
     const host = $("#products");
-    if (reset) host.replaceChildren();
+    if (reset) mount(host);
+
     if (!S.products.length) {
-      host.replaceChildren();
-      $("#emptyState").replaceChildren(empty("\u{1F50D}", "Nothing here yet",
+      mount(host);
+      mount($("#emptyState"), empty("\u{1F50D}", "Nothing here yet",
         S.q ? `No products match \u201c${S.q}\u201d.` : "This store hasn't added products to this category."));
+      $("#loadMore").classList.add("hide");
       return;
     }
-    $("#emptyState").replaceChildren();
+    mount($("#emptyState"));
+
     const frag = document.createDocumentFragment();
-    S.products.slice(reset ? 0 : host.children.length).forEach(p => frag.append(productCard(p)));
+    S.products.slice(from).forEach(p => frag.append(productCard(p)));
     host.append(frag);
     $("#loadMore").classList.toggle("hide", !S.hasMore);
   }
 
   function productCard(p) {
     const soldOut = p.stock <= 0;
+    const photo = img(p.images?.[0], { alt: p.name, cls: "img" })
+      || el("div", { class: "img ph" }, "\u{1F4E6}");
     return el("button", { class: "p-card", onclick: () => openProduct(p) },
-      el("img", { class: "img", src: p.images?.[0] || "", alt: p.name, loading: "lazy" }),
+      photo,
       el("div", { class: "body" },
         el("div", { class: "name clamp2" }, p.name),
-        p.variant_groups?.length ? el("div", { class: "xs muted" }, p.variant_groups.map(g => g.name).join(" \u00b7 ")) : null,
+        p.variant_groups?.length
+          ? el("div", { class: "xs muted" }, p.variant_groups.map(g => g.name).join(" \u00b7 ")) : null,
         el("div", { class: "price" }, money(p.price))),
       soldOut ? el("div", { class: "sold-out" }, "Sold out") : null);
   }
@@ -125,25 +150,30 @@
     const chosen = {};
     (p.variant_groups || []).forEach(g => chosen[g.name] = null);
 
-    const gallery = el("div", { class: "gallery" }, ...(p.images || []).map(src => el("img", { src, alt: p.name })));
-    const dots = el("div", { class: "gal-dots" }, ...(p.images || []).map((_, i) => el("i", { class: i ? "" : "on" })));
-    gallery.addEventListener("scroll", debounce(() => {
-      const i = Math.round(gallery.scrollLeft / gallery.clientWidth);
-      $$("i", dots).forEach((d, j) => d.classList.toggle("on", i === j));
-    }, 60));
+    const photos = (p.images || []).filter(Boolean);
+    const gallery = el("div", { class: "gallery" },
+      ...(photos.length
+        ? photos.map(id => img(id, { alt: p.name }) || el("div", { class: "ph", style: "aspect-ratio:1" }, "\u{1F4E6}"))
+        : [el("div", { class: "ph", style: "aspect-ratio:1;width:100%;border-radius:12px" }, "\u{1F4E6}")]));
+    const dots = photos.length > 1
+      ? el("div", { class: "gal-dots" }, ...photos.map((_, i) => el("i", { class: i ? "" : "on" })))
+      : null;
+    if (dots) {
+      gallery.addEventListener("scroll", debounce(() => {
+        const i = Math.round(gallery.scrollLeft / gallery.clientWidth);
+        $$("i", dots).forEach((d, j) => d.classList.toggle("on", i === j));
+      }, 60));
+    }
 
-    const priceEl = el("div", { class: "price bold", style: "font-size:1.35rem;color:var(--brand)" }, money(p.price));
+    const priceEl = el("div", { class: "bold", style: "font-size:1.35rem;color:var(--brand)" }, money(p.price));
     const nEl = el("span", { class: "n" }, "1");
     const addBtn = el("button", { class: "btn primary block lg" }, "Add to cart");
 
-    const livePrice = () => {
-      let price = p.price;
-      (p.variant_groups || []).forEach(g => {
-        const i = g.options.indexOf(chosen[g.name]);
-        if (i > -1) price += (g.price_delta?.[i] || 0);
-      });
-      return price;
-    };
+    const livePrice = () => (p.variant_groups || []).reduce((price, g) => {
+      const i = g.options.indexOf(chosen[g.name]);
+      return price + (i > -1 ? (g.price_delta?.[i] || 0) : 0);
+    }, p.price);
+
     const refresh = () => {
       priceEl.textContent = money(livePrice() * qty);
       const missing = (p.variant_groups || []).find(g => !chosen[g.name]);
@@ -153,29 +183,33 @@
 
     const variantUI = (p.variant_groups || []).map(g => el("div", { class: "field" },
       el("label", {}, g.name),
-      el("div", { class: "chips" }, ...g.options.map((o, i) => el("button", {
+      el("div", { class: "chips wrap-" }, ...g.options.map((o, i) => el("button", {
         class: "chip", type: "button",
         onclick: e => {
           chosen[g.name] = o;
           e.currentTarget.parentElement.querySelectorAll(".chip").forEach(c => c.classList.remove("on"));
-          e.currentTarget.classList.add("on"); refresh();
+          e.currentTarget.classList.add("on");
+          refresh();
         }
       }, o + (g.price_delta?.[i] ? ` (+${money(g.price_delta[i])})` : ""))))));
 
     const stepper = el("div", { class: "stepper" },
       el("button", { "aria-label": "Decrease", onclick: () => { qty = Math.max(1, qty - 1); nEl.textContent = qty; refresh(); } }, "\u2212"),
       nEl,
-      el("button", { "aria-label": "Increase", onclick: () => { if (qty >= p.stock) return toast(`Only ${p.stock} in stock.`); qty++; nEl.textContent = qty; refresh(); } }, "+"));
+      el("button", { "aria-label": "Increase", onclick: () => {
+        if (qty >= p.stock) return toast(`Only ${p.stock} in stock.`);
+        qty++; nEl.textContent = qty; refresh();
+      } }, "+"));
 
     const m = modal({
       title: p.name,
-      body: el("div", { class: "col" },
+      body: el("div", {},
         gallery, dots,
-        el("div", { class: "row between mt" }, priceEl,
+        el("div", { class: "row between" }, priceEl,
           el("span", { class: "badge " + (p.stock > 5 ? "ok" : "warn") }, p.stock + " in stock")),
-        p.description ? el("p", { class: "muted mt" }, p.description) : null,
-        el("div", { class: "mt" }, ...variantUI),
-        el("div", { class: "row mt" }, el("span", { class: "small muted grow" }, "Quantity"), stepper)),
+        p.description ? el("p", { class: "muted" }, p.description) : null,
+        ...variantUI,
+        el("div", { class: "row" }, el("span", { class: "small muted grow" }, "Quantity"), stepper)),
       footer: addBtn
     });
     refresh();
@@ -188,8 +222,12 @@
         if (line.qty + qty > p.stock) return toast(`Only ${p.stock} in stock.`, "err");
         line.qty += qty;
       } else {
-        S.cart.push({ key, product_id: p.product_id, name: p.name, variant: { ...chosen }, variantLabel,
-                      price: livePrice(), qty, image: p.images?.[0] || "" });
+        S.cart.push({
+          key, product_id: p.product_id, name: p.name,
+          variant: { ...chosen }, variantLabel,
+          price: livePrice(), qty,
+          image: p.images?.[0] || ""      /* store the id, resolve at render time */
+        });
       }
       persistCart(); m.close(); toast("Added to cart", "ok");
     };
@@ -198,11 +236,12 @@
   /* ---------------- Cart ---------------- */
   const cartCount = () => S.cart.reduce((t, l) => t + l.qty, 0);
   const cartSubtotal = () => S.cart.reduce((t, l) => t + l.price * l.qty, 0);
+
   function persistCart() { store.set(cartKey(), S.cart); renderCartFab(); }
+
   function renderCartFab() {
-    const fab = $("#cartFab");
     const n = cartCount();
-    fab.hidden = n === 0;
+    $("#cartFab").hidden = n === 0;
     $("#cartCount").textContent = n;
     $("#cartTotal").textContent = money(cartSubtotal());
   }
@@ -210,26 +249,30 @@
   function openCart() {
     if (!S.cart.length) return toast("Your cart is empty.");
     const body = el("div");
-    const totals = el("div", { class: "totals" });
     const checkoutBtn = el("button", { class: "btn primary block lg" }, "Checkout");
 
     const paint = () => {
-      body.replaceChildren(...S.cart.map(l => el("div", { class: "cart-line" },
-        el("img", { src: l.image, alt: "" }),
-        el("div", { class: "grow" },
-          el("div", { class: "bold" }, l.name),
-          l.variantLabel ? el("div", { class: "xs muted" }, l.variantLabel) : null,
-          el("div", { class: "small" }, money(l.price), " \u00d7 ", String(l.qty)),
-          el("button", { class: "btn link xs", onclick: () => { S.cart = S.cart.filter(x => x.key !== l.key); persistCart(); S.cart.length ? paint() : (m.close(), toast("Cart cleared")); } }, "Remove")),
-        el("div", { class: "bold" }, money(l.price * l.qty)))));
-      totals.replaceChildren(
-        el("div", { class: "t-row" }, el("span", { class: "muted" }, "Subtotal"), el("span", {}, money(cartSubtotal()))),
-        el("div", { class: "t-row muted xs" }, el("span", {}, "Delivery fee"), el("span", {}, "Calculated at checkout")));
-      body.append(totals);
+      mount(body,
+        ...S.cart.map(l => el("div", { class: "cart-line" },
+          img(l.image, { alt: "" }) || el("div", { class: "ph", style: "width:62px;height:62px;border-radius:9px" }, "\u{1F4E6}"),
+          el("div", { class: "grow" },
+            el("div", { class: "bold" }, l.name),
+            l.variantLabel ? el("div", { class: "xs muted" }, l.variantLabel) : null,
+            el("div", { class: "small muted" }, `${money(l.price)} \u00d7 ${l.qty}`),
+            el("button", { class: "btn link xs", onclick: () => {
+              S.cart = S.cart.filter(x => x.key !== l.key);
+              persistCart();
+              if (S.cart.length) paint(); else { m.close(); toast("Cart cleared"); }
+            } }, "Remove")),
+          el("div", { class: "bold" }, money(l.price * l.qty)))),
+        el("div", { class: "totals" },
+          el("div", { class: "t-row" }, el("span", {}, "Subtotal"), el("span", {}, money(cartSubtotal()))),
+          el("div", { class: "t-row" }, el("span", {}, "Delivery fee"), el("span", { class: "muted" }, "Calculated at checkout"))));
     };
     paint();
 
     const m = modal({ title: `Your cart (${cartCount()})`, body, footer: checkoutBtn, side: true });
+
     checkoutBtn.onclick = async () => {
       checkoutBtn.disabled = true; checkoutBtn.textContent = "Checking stock\u2026";
       try {
@@ -259,7 +302,8 @@
     if (ff.length === 1) F.fulfillment = ff[0].type;
     let step = 1, orderNo = null;
 
-    const steps = el("div", { class: "steps" }, el("div", { class: "s on" }), el("div", { class: "s" }), el("div", { class: "s" }));
+    const steps = el("div", { class: "steps" },
+      el("div", { class: "s on" }), el("div", { class: "s" }), el("div", { class: "s" }));
     const body = el("div");
     const backBtn = el("button", { class: "btn ghost" }, "Back");
     const nextBtn = el("button", { class: "btn primary" }, "Review order");
@@ -270,38 +314,44 @@
       if (!row || F.fulfillment !== "delivery") return 0;
       return row.fee_mode === "manual" ? null : (row.fee || 0);
     };
+
     const setStep = n => {
       step = n;
-      $$(".s", steps).forEach((s, i) => s.classList.toggle("on", i < n));
+      $$(".s", steps).forEach((s, idx) => s.classList.toggle("on", idx < n));
       backBtn.classList.toggle("hide", n === 1 || n === 3);
       render();
     };
 
+    const f = (label, node, hint) => el("div", { class: "field" },
+      el("label", {}, label), node, hint ? el("div", { class: "hint" }, hint) : null);
+
     function stepForm() {
       const wrap = el("div");
-      const f = (label, node, hint) => el("div", { class: "field" }, el("label", {}, label), node, hint ? el("div", { class: "hint" }, hint) : null);
-
       wrap.append(
-        f("Your name", el("input", { class: "input", value: F.name, autocomplete: "name", oninput: e => F.name = e.target.value })),
-        f("Mobile number", el("input", { class: "input", type: "tel", value: F.mobile, autocomplete: "tel", placeholder: "09XX XXX XXXX", oninput: e => F.mobile = e.target.value })));
+        f("Your name", el("input", { class: "input", value: F.name, autocomplete: "name",
+          oninput: e => F.name = e.target.value })),
+        f("Mobile number", el("input", { class: "input", type: "tel", value: F.mobile, autocomplete: "tel",
+          placeholder: "09XX XXX XXXX", oninput: e => F.mobile = e.target.value })));
 
       if (ff.length > 1) {
-        wrap.append(f("How would you like to get it?", el("div", { class: "chips" },
+        wrap.append(f("How would you like to get it?", el("div", { class: "chips wrap-" },
           ...ff.map(x => el("button", {
             class: "chip" + (F.fulfillment === x.type ? " on" : ""), type: "button",
             onclick: () => { F.fulfillment = x.type; F.payment = ""; render(); }
-          }, ({ delivery: "Delivery", pickup: "Pickup", meetup: "Meet-up" })[x.type])))));
+          }, FF_LABEL[x.type])))));
       } else if (ff.length === 1) {
-        wrap.append(el("p", { class: "small muted mb" }, "Fulfillment: ",
-          el("strong", {}, ({ delivery: "Delivery", pickup: "Pickup", meetup: "Meet-up" })[ff[0].type])));
+        wrap.append(el("p", { class: "small muted mb" }, "Fulfillment: ", el("strong", {}, FF_LABEL[ff[0].type])));
       }
 
       const row = ff.find(x => x.type === F.fulfillment);
       if (F.fulfillment === "delivery")
-        wrap.append(f("Delivery address", el("textarea", { class: "textarea", value: F.address, oninput: e => F.address = e.target.value }), row?.instructions || ""));
+        wrap.append(f("Delivery address",
+          el("textarea", { class: "textarea", value: F.address, oninput: e => F.address = e.target.value }),
+          row?.instructions || ""));
       if (F.fulfillment === "pickup")
-        wrap.append(el("div", { class: "card flat mb", style: "background:var(--card-2)" },
-          el("div", { class: "bold small" }, "Pick up at"), el("div", { class: "small" }, row?.address || "\u2014"),
+        wrap.append(el("div", { class: "card flat mb" },
+          el("div", { class: "bold small" }, "Pick up at"),
+          el("div", { class: "small" }, row?.address || "\u2014"),
           row?.instructions ? el("div", { class: "xs muted mt" }, row.instructions) : null));
       if (F.fulfillment === "meetup")
         wrap.append(f("Meet-up location", el("select", { class: "select", onchange: e => F.meetup = e.target.value },
@@ -312,36 +362,40 @@
       if (sch?.enabled) {
         const min = new Date(Date.now() + (sch.prep_days || 0) * 86400000).toISOString().slice(0, 10);
         const max = new Date(Date.now() + (sch.max_advance_days || 14) * 86400000).toISOString().slice(0, 10);
-        wrap.append(f("Preferred date", el("input", { class: "input", type: "date", min, max, value: F.date, onchange: e => F.date = e.target.value }),
+        wrap.append(f("Preferred date",
+          el("input", { class: "input", type: "date", min, max, value: F.date, onchange: e => F.date = e.target.value }),
           `Available from ${dateFmt(min)} to ${dateFmt(max)}.`));
       }
 
       const valid = pms.filter(p => !p.valid_for?.length || p.valid_for.includes(F.fulfillment));
       if (valid.length === 1 && !F.payment) F.payment = valid[0].method_id;
-      wrap.append(f("Payment method", el("div", { class: "col" },
+
+      wrap.append(f("Payment method", valid.length ? el("div", { class: "col" },
         ...valid.map(p => el("button", {
-          class: "list-item" + (F.payment === p.method_id ? "" : ""), type: "button",
-          style: F.payment === p.method_id ? "border-color:var(--brand);background:var(--brand-050)" : "",
+          class: "list-item" + (F.payment === p.method_id ? " selected" : ""), type: "button",
           onclick: () => { F.payment = p.method_id; render(); }
         },
-          p.qr_file_id ? el("img", { class: "thumb", src: p.qr_file_id, alt: "" }) : el("div", { class: "thumb", style: "display:grid;place-items:center" }, "\u{1F4B3}"),
-          el("div", { class: "grow" }, el("div", { class: "bold" }, p.name),
-            p.account_number ? el("div", { class: "xs muted" }, p.account_name + " \u00b7 " + p.account_number) : null,
-            p.requires_proof ? el("div", { class: "xs muted" }, "Proof of payment required") : null))))));
+          img(p.qr_file_id, { alt: "", cls: "thumb", fallback: imgFallback("\u{1F4B3}") }) || imgFallback("\u{1F4B3}"),
+          el("div", { class: "grow" },
+            el("div", { class: "li-title" }, p.name),
+            p.account_number ? el("div", { class: "li-sub" }, `${p.account_name} \u00b7 ${p.account_number}`) : null,
+            p.requires_proof ? el("div", { class: "li-sub" }, "Proof of payment required") : null))))
+        : el("div", { class: "locked" }, "This store hasn't set up a payment method yet. Please contact the seller.")));
 
       const chosenPm = pms.find(p => p.method_id === F.payment);
+      if (chosenPm?.qr_file_id) {
+        const qr = img(chosenPm.qr_file_id, { alt: "Payment QR code", cls: "qr-img", style: "margin:0 auto" });
+        if (qr) wrap.append(el("div", { class: "card flat mb", style: "text-align:center" },
+          el("div", { class: "small bold mb" }, "Scan to pay"), qr));
+      }
       if (chosenPm?.requires_proof) {
-        const preview = el("div", { class: "uploader" }, F.proof ? el("img", { src: F.proof, alt: "Receipt" }) : "Tap to upload a screenshot of your payment");
-        const input = el("input", { type: "file", accept: "image/*", class: "sr", onchange: async e => {
-          const file = e.target.files[0]; if (!file) return;
-          try { F.proof = await fileToDataURL(file, 1400); preview.replaceChildren(el("img", { src: F.proof, alt: "Receipt" })); }
-          catch (err) { toast(err.message, "err"); }
-        } });
-        preview.onclick = () => input.click();
-        wrap.append(f("Proof of payment", el("div", {}, preview, input)));
+        wrap.append(f("Proof of payment",
+          imagePicker({ value: F.proof, label: "Tap to upload a screenshot of your payment",
+            maxPx: 1400, onChange: v => F.proof = v })));
       }
 
-      wrap.append(f("Notes for the seller (optional)", el("textarea", { class: "textarea", value: F.notes, oninput: e => F.notes = e.target.value })));
+      wrap.append(f("Notes for the seller (optional)",
+        el("textarea", { class: "textarea", value: F.notes, oninput: e => F.notes = e.target.value })));
       return wrap;
     }
 
@@ -360,24 +414,29 @@
     function stepReview() {
       const fee = feeFor();
       const pm = pms.find(p => p.method_id === F.payment);
-      const line = (k, v) => el("div", { class: "t-row" }, el("span", { class: "muted" }, k), el("span", { class: "bold" }, v));
-      return el("div", { class: "col" },
-        el("div", { class: "card flat", style: "background:var(--card-2)" },
+      return el("div", {},
+        el("div", { class: "card flat" },
+          el("h4", { class: "sec-h" }, "Your order"),
           ...S.cart.map(l => el("div", { class: "t-row" },
             el("span", {}, `${l.qty} \u00d7 ${l.name}${l.variantLabel ? " (" + l.variantLabel + ")" : ""}`),
             el("span", {}, money(l.price * l.qty)))),
           el("div", { class: "totals" },
-            line("Subtotal", money(cartSubtotal())),
-            line("Delivery fee", fee === null ? "To be confirmed by seller" : money(fee)),
+            el("div", { class: "t-row" }, el("span", {}, "Subtotal"), el("span", {}, money(cartSubtotal()))),
+            el("div", { class: "t-row" }, el("span", {}, "Delivery fee"),
+              el("span", {}, fee === null ? "To be confirmed" : money(fee))),
             el("div", { class: "t-row grand" }, el("span", {}, "Total"),
               el("span", {}, money(cartSubtotal() + (fee || 0)) + (fee === null ? " +" : ""))))),
         el("div", { class: "card flat" },
-          line("Name", F.name), line("Mobile", F.mobile),
-          line("Method", { delivery: "Delivery", pickup: "Pickup", meetup: "Meet-up" }[F.fulfillment]),
-          F.address ? line("Address", F.address) : null,
-          F.meetup ? line("Meet-up", F.meetup) : null,
-          F.date ? line("Preferred date", dateFmt(F.date)) : null,
-          line("Payment", pm?.name || "\u2014")),
+          el("h4", { class: "sec-h" }, "Your details"),
+          dl(
+            dlRow("Name", F.name),
+            dlRow("Mobile", F.mobile),
+            dlRow("Method", FF_LABEL[F.fulfillment]),
+            dlRow("Address", F.address, { stack: true }),
+            dlRow("Meet-up", F.meetup),
+            dlRow("Preferred date", F.date ? dateFmt(F.date) : null),
+            dlRow("Payment", pm?.name),
+            dlRow("Notes", F.notes, { stack: true }))),
         el("button", { class: "btn link", onclick: () => setStep(1) }, "Edit details"));
     }
 
@@ -393,22 +452,26 @@
     }
 
     function render() {
-      body.replaceChildren(step === 1 ? stepForm() : step === 2 ? stepReview() : stepDone());
+      mount(body, step === 1 ? stepForm() : step === 2 ? stepReview() : stepDone());
       nextBtn.textContent = step === 1 ? "Review order" : step === 2 ? "Place order" : "Done";
       nextBtn.disabled = false;
     }
 
     backBtn.onclick = () => setStep(step - 1);
+
     nextBtn.onclick = async () => {
       if (step === 1) { const e = validate(); if (e) return toast(e, "err"); return setStep(2); }
       if (step === 3) { m.close(); return; }
+
       nextBtn.disabled = true; nextBtn.textContent = "Placing order\u2026";
       try {
         const check = await api.validateCart(PUBLIC_ID, S.cart);
         if (check.issues.length) {
-          S.cart = check.items.filter(i => i.qty > 0); persistCart();
+          S.cart = check.items.filter(i => i.qty > 0);
+          persistCart();
           check.issues.forEach(i => toast(i.message, "err", 5000));
-          nextBtn.disabled = false; setStep(1); return;
+          nextBtn.disabled = false; setStep(1);
+          return;
         }
         const fee = feeFor();
         const pm = pms.find(p => p.method_id === F.payment);
@@ -425,55 +488,70 @@
         setStep(3);
         loadProducts(true);
       } catch (e) {
-        toast(e.message, "err", 5000);
+        toast(e.message, "err", 6000);
         nextBtn.disabled = false; nextBtn.textContent = "Place order";
       }
     };
+
     setStep(1);
   }
 
   /* ---------------- Track order ---------------- */
   function openTrack() {
-    const input = el("input", { class: "input", placeholder: "e.g. VC-100238", autocomplete: "off" });
-    const out = el("div", { class: "mt" });
+    const input = el("input", { class: "input", placeholder: "e.g. VC-1001", autocomplete: "off" });
+    const out = el("div");
     const go = el("button", { class: "btn primary" }, "Find order");
+
     go.onclick = async () => {
       if (!input.value.trim()) return toast("Enter your order number.");
       go.disabled = true;
       try {
         const o = await api.trackOrder(PUBLIC_ID, input.value);
         const tone = { PENDING: "warn", UNPAID: "warn", PAID: "info", COMPLETED: "ok", CANCELLED: "danger" }[o.status] || "";
-        out.replaceChildren(el("div", { class: "card flat" },
-          el("div", { class: "row between" }, el("strong", {}, o.order_number), el("span", { class: "badge " + tone }, o.status)),
-          el("div", { class: "small muted mt" }, "Placed ", dateFmt(o.created_at)),
-          el("div", { class: "totals mt" }, ...o.items.map(i =>
-            el("div", { class: "t-row" }, el("span", {}, `${i.qty} \u00d7 ${i.name}`), el("span", {}, money(i.price * i.qty)))),
+        mount(out, el("div", { class: "card flat" },
+          el("div", { class: "row between" },
+            el("strong", {}, o.order_number),
+            el("span", { class: "badge " + tone }, o.status)),
+          el("div", { class: "small muted mt" }, "Placed " + dateFmt(o.created_at)),
+          el("div", { class: "totals mt" },
+            ...(o.items || []).map(i => el("div", { class: "t-row" },
+              el("span", {}, `${i.qty} \u00d7 ${i.name}`), el("span", {}, money(i.price * i.qty)))),
             el("div", { class: "t-row grand" }, el("span", {}, "Total"), el("span", {}, money(o.total))))));
-      } catch (e) { out.replaceChildren(el("p", { class: "small", style: "color:var(--danger)" }, e.message)); }
-      finally { go.disabled = false; }
+      } catch (e) {
+        mount(out, el("p", { class: "small", style: "color:var(--danger)" }, e.message));
+      } finally { go.disabled = false; }
     };
-    modal({ title: "Check my order", body: el("div", {}, el("div", { class: "field" }, el("label", {}, "Order number"), input), out), footer: go });
+
+    modal({
+      title: "Check my order",
+      body: el("div", {}, el("div", { class: "field" }, el("label", {}, "Order number"), input), out),
+      footer: go
+    });
   }
 
   /* ---------------- Store info ---------------- */
   function openInfo() {
     const ff = S.store.fulfillment || [];
-    const label = { delivery: "Delivery", pickup: "Pickup", meetup: "Meet-up" };
     modal({
       title: S.store.business_name,
-      body: el("div", { class: "col" },
+      body: el("div", {},
         S.store.tagline ? el("p", { class: "muted" }, S.store.tagline) : null,
-        el("h4", { class: "mt" }, "How you can get your order"),
+        el("h4", { class: "sec-h" }, "How you can get your order"),
         ...ff.map(f => el("div", { class: "card flat" },
-          el("div", { class: "bold" }, label[f.type]),
-          f.type === "delivery" ? el("div", { class: "small muted" }, f.fee_mode === "manual" ? "Fee confirmed by the seller after ordering" : "Fee: " + money(f.fee)) : null,
-          f.address ? el("div", { class: "small" }, f.address) : null,
-          f.locations?.length ? el("div", { class: "small" }, f.locations.join(" \u00b7 ")) : null,
+          el("div", { class: "bold" }, FF_LABEL[f.type]),
+          f.type === "delivery"
+            ? el("div", { class: "small muted" },
+                f.fee_mode === "manual" ? "Fee confirmed by the seller after ordering" : "Fee: " + money(f.fee))
+            : null,
+          f.address ? el("div", { class: "small mt" }, f.address) : null,
+          f.locations?.length ? el("div", { class: "small mt" }, f.locations.join(" \u00b7 ")) : null,
           f.instructions ? el("div", { class: "xs muted mt" }, f.instructions) : null)),
-        (S.store.contact || []).length ? el("h4", { class: "mt" }, "Contact") : null,
-        ...(S.store.contact || []).map(c => el("div", { class: "row between small" },
-          el("span", { class: "muted" }, c.type), el("strong", {}, c.value))),
-        el("button", { class: "btn ghost block mt", onclick: () => copy(location.href) }, "Copy storefront link"))
+        (S.store.contact || []).length
+          ? el("div", { class: "card flat" },
+              el("h4", { class: "sec-h" }, "Contact"),
+              dl(...S.store.contact.map(c => dlRow(c.type, c.value))))
+          : null,
+        el("button", { class: "btn ghost block", onclick: () => copy(location.href) }, "Copy storefront link"))
     });
   }
 
@@ -491,7 +569,10 @@
       e.currentTarget.textContent = S.view === "grid" ? "\u2630" : "\u25A6";
     };
     $("#loadMore").onclick = () => loadProducts(false);
-    const io = new IntersectionObserver(es => { if (es[0].isIntersecting && S.hasMore && !S.loading) loadProducts(false); }, { rootMargin: "600px" });
+
+    const io = new IntersectionObserver(
+      es => { if (es[0].isIntersecting && S.hasMore && !S.loading) loadProducts(false); },
+      { rootMargin: "600px" });
     io.observe($("#sentinel"));
   }
 
