@@ -12,12 +12,22 @@
     { id: "plans", label: "Plans", ico: "🎟️" },
     { id: "methods", label: "Payments", ico: "💳" }
   ];
-  const S = { section: "dashboard", email: null };
+  const S = { section: "dashboard", email: null, initialDashboard: null };
 
   async function boot() {
     theme.init();
     const t = store.get("masterToken");
-    if (t) { api.masterToken = t; try { await api.masterDashboard(); return onIn(store.get("masterEmail")); } catch { store.del("masterToken"); } }
+    if (t) {
+      api.masterToken = t;
+      try {
+        const dashboard = await api.masterDashboard();
+        return onIn(store.get("masterEmail"), dashboard);
+      } catch {
+        store.del("masterToken");
+        store.del("masterEmail");
+        api.masterToken = null;
+      }
+    }
     renderSignIn();
   }
 
@@ -56,8 +66,9 @@
     }
   }
 
-  function onIn(email) {
+  function onIn(email, dashboard = null) {
     S.email = email;
+    S.initialDashboard = dashboard;
     $("#auth").classList.add("hide");
     $("#shell").classList.remove("hide");
     $("#ownerEmail").textContent = email || "owner";
@@ -96,7 +107,9 @@
 
   /* ---------- Dashboard ---------- */
   async function viewDashboard(m) {
-    const d = await api.masterDashboard();
+    const d = S.initialDashboard || await api.masterDashboard();
+    S.initialDashboard = null;
+    const recentStores = Array.isArray(d?.recent_stores) ? d.recent_stores : [];
     const stat = (k, v, sub) => el("div", { class: "stat" }, el("div", { class: "k" }, k), el("div", { class: "v" }, v), sub ? el("div", { class: "d" }, sub) : null);
     m.replaceChildren(
       header("Platform overview", `Signed in as ${S.email}`),
@@ -104,10 +117,12 @@
         el("strong", {}, `${d.pending_payments} payment${d.pending_payments === 1 ? "" : "s"} waiting for review`),
         el("button", { class: "btn primary sm mt", onclick: () => go("payments") }, "Review now")) : null,
       el("div", { class: "stats" },
-        stat("Stores", d.total), stat("Active", d.active), stat("Expired", d.expired), stat("Revenue", money(d.revenue))),
+        stat("Stores", d?.total ?? 0), stat("Active", d?.active ?? 0), stat("Expired", d?.expired ?? 0), stat("Revenue", money(d?.revenue ?? 0))),
       el("div", { class: "card mt-lg" }, el("div", { class: "card-h" }, el("h3", {}, "Newest stores"),
         el("button", { class: "btn ghost sm", onclick: () => go("stores") }, "All stores")),
-        el("div", { class: "list" }, ...d.recent_stores.map(storeRow))));
+        recentStores.length
+          ? el("div", { class: "list" }, ...recentStores.map(storeRow))
+          : empty("🏪", "No stores yet", "Create your first merchant store from the Admin page.")));
   }
 
   function storeRow(s) {
