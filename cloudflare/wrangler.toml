@@ -12,6 +12,6 @@ binding = "FILES"
 id = "499cc96ee4294a109d5036921fdcd6b5"
 
 [vars]
-MASTER_ADMIN_EMAIL = "you@example.com"
-GOOGLE_CLIENT_ID = "YOUR_GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com"
+MASTER_ADMIN_EMAIL = "itsbusiness.admin@gmail.com"
+GOOGLE_CLIENT_ID = "996370090328-3sukmrf88b4rtcj18dvdhmqulj11jcr3.apps.googleusercontent.com"
 ALLOWED_ORIGINS = "https://itsbusinessadmin.github.io"
