@@ -1,10 +1,10 @@
-name = "universal-store"
+name = "main-store"
 main = "worker.js"
 compatibility_date = "2025-01-01"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "universal-store"
+database_name = "main-store"
 database_id = "5c2f51b8-3b2b-4074-926f-e66e2c47dc32"
 
 [[kv_namespaces]]
