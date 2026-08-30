@@ -14,4 +14,4 @@ id = "499cc96ee4294a109d5036921fdcd6b5"
 [vars]
 MASTER_ADMIN_EMAIL = "you@example.com"
 GOOGLE_CLIENT_ID = "YOUR_GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com"
-ALLOWED_ORIGINS = "*"
+ALLOWED_ORIGINS = "https://itsbusinessadmin.github.io"
