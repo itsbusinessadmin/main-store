@@ -706,27 +706,50 @@
 
   /* ================= Guided setup wizard ================= */
   async function viewWizard(m) {
-    const STEPS = ["Business", "Logo", "Theme", "Contact", "Payment", "Fulfillment", "First product", "Review"];
+    const STEPS = [
+      { key: "business",    label: "Business",      skippable: false },
+      { key: "logo",        label: "Logo",          skippable: true  },
+      { key: "theme",       label: "Theme",         skippable: true  },
+      { key: "contact",     label: "Contact",       skippable: true  },
+      { key: "payment",     label: "Payment",       skippable: false },
+      { key: "fulfillment", label: "Fulfillment",   skippable: false },
+      { key: "product",     label: "First product", skippable: true  },
+      { key: "review",      label: "Review",        skippable: false }
+    ];
     let i = 0;
+    const skipped = new Set();
+
     const F = {
       business_name: S.store.business_name, tagline: "", logo: "", accent: "#173d24",
       contact: [{ type: "mobile", value: "", visible: 1 }],
       method: { name: "", account_name: "", account_number: "", requires_proof: 1, valid_for: ["delivery", "pickup", "meetup"] },
-      ff: { delivery: { type: "delivery", enabled: 1, fee_mode: "fixed", fee: 0, instructions: "" },
-            pickup: { type: "pickup", enabled: 0, address: "", instructions: "" },
-            meetup: { type: "meetup", enabled: 0, locations: [] } },
+      ff: { delivery: { type: "delivery", enabled: 1, fee_mode: "fixed", fee: 0, address: "", instructions: "", locations: [] },
+            pickup:   { type: "pickup",   enabled: 0, fee_mode: "fixed", fee: 0, address: "", instructions: "", locations: [] },
+            meetup:   { type: "meetup",   enabled: 0, fee_mode: "fixed", fee: 0, address: "", instructions: "", locations: [] } },
       product: { name: "", price: "", stock: 1, description: "", images: [] }
     };
 
     const nav = el("div", { class: "wizard-nav" });
     const body = el("div", { class: "card mt" });
-    const back = el("button", { class: "btn ghost" }, "Back");
+    const back = el("button", { class: "btn ghost" }, "\u2190 Back");
+    const skip = el("button", { class: "btn ghost" }, "Skip for now");
     const next = el("button", { class: "btn primary" }, "Continue");
 
-    const paintNav = () => nav.replaceChildren(...STEPS.map((s, n) =>
-      el("div", { class: "wizard-step" + (n === i ? " on" : n < i ? " done" : "") }, `${n + 1}. ${s}`)));
+    /* Clicking a step chip jumps back to it — only to steps already visited. */
+    const paintNav = () => nav.replaceChildren(...STEPS.map((s, n) => {
+      const cls = n === i ? " on" : (n < i ? " done" : "");
+      const chip = el("div", {
+        class: "wizard-step" + cls,
+        style: n < i ? "cursor:pointer" : "",
+        title: n < i ? "Go back to this step" : ""
+      }, `${n + 1}. ${s.label}${skipped.has(s.key) ? " \u00b7 skipped" : ""}`);
+      if (n < i) chip.onclick = () => { i = n; paint(); };
+      return chip;
+    }));
 
-    const f = (label, node, hint) => el("div", { class: "field" }, el("label", {}, label), node, hint ? el("div", { class: "hint" }, hint) : null);
+    const f = (label, node, hint) => el("div", { class: "field" },
+      el("label", {}, label), node, hint ? el("div", { class: "hint" }, hint) : null);
+
     const uploader = (getter, setter, text) => {
       const box = el("div", { class: "uploader" }, getter() ? el("img", { src: getter(), alt: "" }) : text);
       const inp = el("input", { type: "file", accept: "image/*", class: "sr", onchange: async e => {
@@ -737,85 +760,172 @@
       return el("div", {}, box, inp);
     };
 
-    const steps = [
-      () => el("div", {}, el("h3", { class: "mb" }, "Tell us about your business"),
+    const optionalNote = t => el("p", { class: "hint mt" }, t);
+
+    const steps = {
+      business: () => el("div", {}, el("h3", { class: "mb" }, "Tell us about your business"),
         f("Business name", el("input", { class: "input", value: F.business_name, oninput: e => F.business_name = e.target.value })),
-        f("Tagline", el("input", { class: "input", value: F.tagline, oninput: e => F.tagline = e.target.value }), "One short line customers see under your name.")),
-      () => el("div", {}, el("h3", { class: "mb" }, "Add your logo"),
+        f("Tagline", el("input", { class: "input", value: F.tagline, oninput: e => F.tagline = e.target.value }),
+          "One short line customers see under your name. Optional.")),
+
+      logo: () => el("div", {}, el("h3", { class: "mb" }, "Add your logo"),
         uploader(() => F.logo, v => F.logo = v, "Tap to upload a square logo"),
-        el("p", { class: "hint mt" }, "You can skip this and add one later.")),
-      () => el("div", {}, el("h3", { class: "mb" }, "Pick your accent color"),
+        optionalNote("Optional \u2014 you can add or change this later in Store settings.")),
+
+      theme: () => el("div", {}, el("h3", { class: "mb" }, "Pick your accent color"),
         f("Accent", el("input", { class: "input", type: "color", style: "max-width:110px;padding:6px", value: F.accent,
           oninput: e => { F.accent = e.target.value; theme.accent(e.target.value); } })),
-        el("div", { class: "card flat mt" }, el("div", { class: "bold" }, "Preview"),
-          el("button", { class: "btn primary mt" }, "Add to cart"))),
-      () => el("div", {}, el("h3", { class: "mb" }, "How can customers reach you?"),
-        f("Mobile number", el("input", { class: "input", type: "tel", value: F.contact[0].value, oninput: e => F.contact[0].value = e.target.value }))),
-      () => el("div", {}, el("h3", { class: "mb" }, "How will customers pay?"),
-        f("Method name", el("input", { class: "input", value: F.method.name, placeholder: "GCash, Bank transfer, Cash\u2026", oninput: e => F.method.name = e.target.value })),
+        el("div", { class: "card flat mt" }, el("div", { class: "bold mb" }, "Preview"),
+          el("button", { class: "btn primary" }, "Add to cart")),
+        optionalNote("Optional \u2014 skipping keeps the default deep green.")),
+
+      contact: () => el("div", {}, el("h3", { class: "mb" }, "How can customers reach you?"),
+        f("Mobile number", el("input", { class: "input", type: "tel", value: F.contact[0].value,
+          oninput: e => F.contact[0].value = e.target.value })),
+        optionalNote("Optional \u2014 you can add email and socials later.")),
+
+      payment: () => el("div", {}, el("h3", { class: "mb" }, "How will customers pay you?"),
+        f("Method name", el("input", { class: "input", value: F.method.name, placeholder: "GCash, Bank transfer, Cash\u2026",
+          oninput: e => F.method.name = e.target.value })),
         f("Account name", el("input", { class: "input", value: F.method.account_name, oninput: e => F.method.account_name = e.target.value })),
         f("Account number", el("input", { class: "input", value: F.method.account_number, oninput: e => F.method.account_number = e.target.value })),
-        el("label", { class: "switch" }, el("input", { type: "checkbox", checked: true, onchange: e => F.method.requires_proof = e.target.checked ? 1 : 0 }),
-          el("span", { class: "track" }), el("span", {}, "Require proof of payment"))),
-      () => el("div", {}, el("h3", { class: "mb" }, "How do customers get their orders?"),
-        el("label", { class: "switch" }, el("input", { type: "checkbox", checked: !!F.ff.delivery.enabled, onchange: e => F.ff.delivery.enabled = e.target.checked ? 1 : 0 }), el("span", { class: "track" }), el("span", {}, "Delivery")),
-        f("Delivery fee", el("input", { class: "input", type: "number", value: F.ff.delivery.fee, oninput: e => F.ff.delivery.fee = Number(e.target.value) || 0 })),
-        el("label", { class: "switch" }, el("input", { type: "checkbox", checked: !!F.ff.pickup.enabled, onchange: e => F.ff.pickup.enabled = e.target.checked ? 1 : 0 }), el("span", { class: "track" }), el("span", {}, "Pickup")),
-        f("Pickup address", el("textarea", { class: "textarea", oninput: e => F.ff.pickup.address = e.target.value }, F.ff.pickup.address))),
-      () => el("div", {}, el("h3", { class: "mb" }, "Add your first product"),
+        el("label", { class: "switch" },
+          el("input", { type: "checkbox", checked: !!F.method.requires_proof, onchange: e => F.method.requires_proof = e.target.checked ? 1 : 0 }),
+          el("span", { class: "track" }), el("span", {}, "Require proof of payment")),
+        el("p", { class: "hint mt" }, "Required \u2014 customers can't check out without at least one payment method.")),
+
+      fulfillment: () => el("div", {}, el("h3", { class: "mb" }, "How do customers get their orders?"),
+        el("label", { class: "switch" },
+          el("input", { type: "checkbox", checked: !!F.ff.delivery.enabled, onchange: e => F.ff.delivery.enabled = e.target.checked ? 1 : 0 }),
+          el("span", { class: "track" }), el("span", { class: "bold" }, "Delivery")),
+        f("Delivery fee", el("input", { class: "input", type: "number", value: F.ff.delivery.fee,
+          oninput: e => F.ff.delivery.fee = Number(e.target.value) || 0 })),
+        el("div", { class: "divider" }),
+        el("label", { class: "switch" },
+          el("input", { type: "checkbox", checked: !!F.ff.pickup.enabled, onchange: e => F.ff.pickup.enabled = e.target.checked ? 1 : 0 }),
+          el("span", { class: "track" }), el("span", { class: "bold" }, "Pickup")),
+        f("Pickup address", el("textarea", { class: "textarea", oninput: e => F.ff.pickup.address = e.target.value }, F.ff.pickup.address)),
+        el("p", { class: "hint mt" }, "Required \u2014 turn on at least one.")),
+
+      product: () => el("div", {}, el("h3", { class: "mb" }, "Add your first product"),
         uploader(() => F.product.images[0], v => F.product.images[0] = v, "Tap to upload a product photo"),
         f("Name", el("input", { class: "input", value: F.product.name, oninput: e => F.product.name = e.target.value })),
         el("div", { class: "grid-2" },
-          f("Price", el("input", { class: "input", type: "number", step: "0.01", value: F.product.price, oninput: e => F.product.price = e.target.value })),
-          f("Stock", el("input", { class: "input", type: "number", value: F.product.stock, oninput: e => F.product.stock = e.target.value }))),
-        f("Description", el("textarea", { class: "textarea", oninput: e => F.product.description = e.target.value }, F.product.description))),
-      () => el("div", {}, el("h3", { class: "mb" }, "Ready to open"),
-        el("div", { class: "card flat" },
-          el("div", { class: "t-row" }, el("span", { class: "muted" }, "Business"), el("strong", {}, F.business_name)),
-          el("div", { class: "t-row" }, el("span", { class: "muted" }, "Payment"), el("strong", {}, F.method.name || "\u2014")),
-          el("div", { class: "t-row" }, el("span", { class: "muted" }, "Fulfillment"), el("strong", {},
-            [F.ff.delivery.enabled && "Delivery", F.ff.pickup.enabled && "Pickup"].filter(Boolean).join(", ") || "\u2014")),
-          el("div", { class: "t-row" }, el("span", { class: "muted" }, "First product"), el("strong", {}, F.product.name || "\u2014"))),
-        el("p", { class: "muted small mt" }, "When you finish, your storefront goes live and your shop link starts working."))
-    ];
+          f("Price", el("input", { class: "input", type: "number", step: "0.01", value: F.product.price,
+            oninput: e => F.product.price = e.target.value })),
+          f("Stock", el("input", { class: "input", type: "number", value: F.product.stock,
+            oninput: e => F.product.stock = e.target.value }))),
+        f("Description", el("textarea", { class: "textarea", oninput: e => F.product.description = e.target.value }, F.product.description)),
+        optionalNote("Optional \u2014 skip this and add products from the Catalog once you're open.")),
 
+      review: () => {
+        const row = (k, v, warn) => el("div", { class: "t-row" },
+          el("span", { class: "muted" }, k),
+          el("span", { class: "bold", style: warn ? "color:var(--warn)" : "" }, v));
+        const ffOn = [F.ff.delivery.enabled && "Delivery", F.ff.pickup.enabled && "Pickup"].filter(Boolean).join(", ");
+        return el("div", {}, el("h3", { class: "mb" }, "Ready to open"),
+          el("div", { class: "card flat" },
+            row("Business", F.business_name),
+            row("Logo", F.logo ? "Added" : "Skipped", !F.logo),
+            row("Theme", skipped.has("theme") ? "Default" : F.accent),
+            row("Contact", F.contact[0].value || "Skipped", !F.contact[0].value),
+            row("Payment", F.method.name || "\u2014"),
+            row("Fulfillment", ffOn || "\u2014"),
+            row("First product", F.product.name || "Skipped", !F.product.name)),
+          skipped.size ? el("div", { class: "card mt", style: "border-color:var(--info);background:var(--info-bg)" },
+            el("strong", {}, "You skipped a few things"),
+            el("p", { class: "small mt" }, "That's fine \u2014 nothing here is permanent. You can fill any of it in later from Store settings and Catalog."),
+            el("button", { class: "btn ghost sm mt", onclick: () => { i = 0; paint(); } }, "Go back and review")) : null,
+          el("p", { class: "muted small mt" }, "When you finish, your storefront goes live and your shop link starts working."));
+      }
+    };
+
+    /* Only blocks steps that genuinely can't be empty. */
     const validate = () => {
-      if (i === 0 && !F.business_name.trim()) return "Enter your business name.";
-      if (i === 3 && !F.contact[0].value.trim()) return "Enter a contact number.";
-      if (i === 4 && !F.method.name.trim()) return "Add at least one payment method.";
-      if (i === 5 && !F.ff.delivery.enabled && !F.ff.pickup.enabled) return "Enable at least one fulfillment option.";
-      if (i === 6 && (!F.product.name.trim() || F.product.price === "")) return "Add a name and price for your first product.";
+      const key = STEPS[i].key;
+      if (key === "business" && !F.business_name.trim()) return "Enter your business name.";
+      if (key === "payment" && !F.method.name.trim()) return "Add at least one payment method so customers can check out.";
+      if (key === "fulfillment" && !F.ff.delivery.enabled && !F.ff.pickup.enabled)
+        return "Turn on at least one way for customers to receive their order.";
+      if (key === "product" && (F.product.name.trim() || F.product.price !== "")) {
+        if (!F.product.name.trim()) return "Give this product a name, or skip this step.";
+        if (F.product.price === "" || Number(F.product.price) < 0) return "Enter a valid price, or skip this step.";
+      }
       return null;
     };
 
     const paint = () => {
       paintNav();
-      body.replaceChildren(steps[i]());
+      body.replaceChildren(steps[STEPS[i].key]());
       back.classList.toggle("hide", i === 0);
+      skip.classList.toggle("hide", !STEPS[i].skippable);
       next.textContent = i === STEPS.length - 1 ? "Finish & open my store" : "Continue";
+      next.disabled = false;
+      window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
-    back.onclick = () => { i--; paint(); };
+    back.onclick = () => { if (i > 0) { i--; paint(); } };
+
+    skip.onclick = () => {
+      const key = STEPS[i].key;
+      skipped.add(key);
+      /* Clear whatever was half-entered so nothing partial gets saved. */
+      if (key === "logo") F.logo = "";
+      if (key === "theme") { F.accent = "#173d24"; theme.accent("#173d24"); }
+      if (key === "contact") F.contact[0].value = "";
+      if (key === "product") F.product = { name: "", price: "", stock: 1, description: "", images: [] };
+      i++; paint();
+      toast(`Skipped \u2014 you can set this up later.`);
+    };
+
     next.onclick = async () => {
-      const e = validate(); if (e) return toast(e, "err");
+      const err = validate();
+      if (err) return toast(err, "err");
+      skipped.delete(STEPS[i].key);
       if (i < STEPS.length - 1) { i++; return paint(); }
-      next.disabled = true; next.textContent = "Setting up\u2026";
+
+      next.disabled = true; back.disabled = true;
+      next.textContent = "Setting up\u2026";
       try {
-        await api.storeSaveSettings({ business_name: F.business_name, settings: {
-          logo_file_id: F.logo, accent_color: F.accent, tagline: F.tagline, announcement: "", contact: F.contact } });
+        await api.storeSaveSettings({
+          business_name: F.business_name,
+          settings: {
+            logo_file_id: F.logo, accent_color: F.accent, tagline: F.tagline, announcement: "",
+            contact: F.contact.filter(c => c.value && c.value.trim())
+          }
+        });
         await api.storeSavePaymentMethod({ method: F.method });
         await api.storeSaveFulfillment({ rows: [F.ff.delivery, F.ff.pickup, F.ff.meetup] });
-        await api.storeSaveProduct({ product: { ...F.product, price: Number(F.product.price) } });
+
+        /* Only save a product if one was actually entered. */
+        if (F.product.name.trim() && F.product.price !== "") {
+          await api.storeSaveProduct({
+            product: {
+              name: F.product.name.trim(),
+              price: Number(F.product.price),
+              stock: Number(F.product.stock) || 0,
+              description: F.product.description || "",
+              images: F.product.images.filter(Boolean),
+              variant_groups: []
+            }
+          });
+        }
+
         const r = await api.storeCompleteSetup();
         S.store = r.store;
         toast("Your store is live \u{1F389}", "ok");
         onLogin({ store: S.store, settings: S.settings });
-      } catch (err) { toast(err.message, "err"); next.disabled = false; next.textContent = "Finish & open my store"; }
+      } catch (e) {
+        toast(e.message || "Setup couldn't be saved. Please try again.", "err", 6000);
+        next.disabled = false; back.disabled = false;
+        next.textContent = "Finish & open my store";
+      }
     };
 
     m.replaceChildren(
-      header("Set up your store", "A few quick steps and you're open for business"),
-      nav, body, el("div", { class: "btn-group mt-lg" }, back, next));
+      header("Set up your store", "A few quick steps and you're open for business. Optional steps can be skipped."),
+      nav, body,
+      el("div", { class: "btn-group mt-lg" }, back, skip, next));
     paint();
   }
 
