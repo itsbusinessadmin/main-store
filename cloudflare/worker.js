@@ -356,6 +356,15 @@ A.store_save_product = async (env, body, ctx) => {
   if (!String(pr.name || "").trim()) bad("A product needs a name.", "VALIDATION");
   if (pr.price == null || Number(pr.price) < 0) bad("Enter a valid price.", "VALIDATION");
 
+  /* The setup wizard doesn't ask for a category, and D1 rejects undefined
+     binds. Fall back to the store's protected "Uncategorized" row. */
+  if (!pr.category_id) {
+    const fallback = await env.DB.prepare(
+      "SELECT category_id FROM categories WHERE store_id=? AND is_system=1"
+    ).bind(s.store_id).first();
+    pr.category_id = fallback?.category_id ?? null;
+  }
+
   const images = [];
   for (const img of pr.images || []) images.push(img?.startsWith("data:") ? await putFile(env, img, "product") : img);
 
