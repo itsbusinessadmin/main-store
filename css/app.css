@@ -558,6 +558,9 @@ tbody tr:hover{background:var(--card-2)}
 }
 /* The hero is a full-bleed banner, so it keeps edge-to-edge `cover` framing —
    the contain-plus-backdrop treatment above is only for product photos. */
+/* The arrow wrapper sits between .hero-media and .gallery, so it has to carry
+   the height through or the gallery's percentage height resolves against auto. */
+.hero-media .gal-view{height:100%}
 .hero-media .gallery{height:100%}
 .hero-media .gal-slide{border-radius:0}
 .hero-media .gal-slide .gal-bg{display:none}
@@ -671,6 +674,32 @@ html{scroll-padding-top:76px}
 }
 .gallery > img,.gallery > .ph{flex:0 0 100%; scroll-snap-align:center; background:var(--card-2)}
 .gallery .ph{display:grid; place-items:center; font-size:34px}
+/* Positioning context for the arrows so they sit over the photo without
+   scrolling away with it. */
+.gal-view{position:relative}
+.gal-nav{
+  position:absolute; top:50%; transform:translateY(-50%); z-index:2;
+  width:38px; height:38px; border-radius:50%; display:grid; place-items:center;
+  font-size:22px; line-height:1; padding-bottom:3px;
+  background:color-mix(in srgb, var(--card) 88%, transparent); color:var(--text);
+  border:1px solid var(--line); box-shadow:var(--shadow-sm);
+  backdrop-filter:blur(6px); opacity:0;
+  transition:opacity var(--fast) var(--ease), background var(--fast) var(--ease), transform var(--fast) var(--ease-spring);
+}
+.gal-nav.prev{left:10px}
+.gal-nav.next{right:10px}
+.gal-view:hover .gal-nav,.gal-nav:focus-visible{opacity:1}
+.gal-nav:hover{background:var(--card); transform:translateY(-50%) scale(1.08)}
+.gal-nav:active{transform:translateY(-50%) scale(.94)}
+/* At the first/last photo the arrow fades back but stays in the DOM and
+   focusable, so keyboard focus is never dropped mid-interaction. */
+.gal-view:hover .gal-nav.off{opacity:.3}
+.gal-nav.off{pointer-events:none}
+/* Touch devices swipe, so the arrows would only be clutter. Keyed off pointer
+   type rather than screen width — a small laptop window still gets arrows, and
+   a large tablet still gets swipe. */
+@media (hover:none),(pointer:coarse){ .gal-nav{display:none} }
+
 .gal-dots{display:flex; gap:6px; justify-content:center; margin-top:8px}
 .gal-dots i{width:6px;height:6px;border-radius:50%;background:var(--line-strong); transition:width var(--fast) var(--ease), background var(--fast) var(--ease)}
 .gal-dots i.on{background:var(--brand); width:18px; border-radius:3px}
