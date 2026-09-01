@@ -65,19 +65,39 @@
             ? "Demo mode is on \u2014 sign-in is simulated locally."
             : "Only the configured owner email can sign in. Everyone else is rejected by the server.")))));
 
-    if (!C.DEMO_MODE && window.google?.accounts?.id) {
-      google.accounts.id.initialize({
-        client_id: C.GOOGLE_CLIENT_ID,
-        callback: async res => {
-          try {
-            const r = await api.masterSignIn(res.credential);
-            api.masterToken = res.credential;
-            store.set("masterToken", res.credential); store.set("masterEmail", r.email);
-            onIn(r.email);
-          } catch (e) { toast(e.message, "err", 6000); }
-        }
-      });
-      google.accounts.id.renderButton(gBtn, { theme: "outline", size: "large", width: 340 });
+    if (!C.DEMO_MODE) {
+      /* The Google script tag is loaded with async/defer (see master.html), so
+         it very often hasn't finished loading yet at this exact point — a
+         one-shot check here silently leaves gBtn empty forever with no button
+         and no explanation. Poll briefly instead, and fail visibly if Google's
+         script genuinely never shows up (e.g. blocked by the network). */
+      const tryRenderGoogleButton = () => {
+        if (!window.google?.accounts?.id) return false;
+        google.accounts.id.initialize({
+          client_id: C.GOOGLE_CLIENT_ID,
+          callback: async res => {
+            try {
+              const r = await api.masterSignIn(res.credential);
+              api.masterToken = res.credential;
+              store.set("masterToken", res.credential); store.set("masterEmail", r.email);
+              onIn(r.email);
+            } catch (e) { toast(e.message, "err", 6000); }
+          }
+        });
+        google.accounts.id.renderButton(gBtn, { theme: "outline", size: "large", width: 340 });
+        return true;
+      };
+
+      if (!tryRenderGoogleButton()) {
+        const poll = setInterval(() => { if (tryRenderGoogleButton()) clearInterval(poll); }, 200);
+        setTimeout(() => {
+          clearInterval(poll);
+          if (!window.google?.accounts?.id) {
+            mount(gBtn, el("p", { class: "small", style: "color:var(--danger)" },
+              "Sign-in couldn't load. Check your connection (or ad-blocker) and refresh the page."));
+          }
+        }, 8000);
+      }
     }
   }
 
