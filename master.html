@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en" data-color-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f6f7f5">
+<meta name="robots" content="noindex,nofollow">
+<title>Master Admin — Universal Store</title>
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/app.css">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+<div id="auth"></div>
+
+<div class="shell hide" id="shell">
+  <aside class="sidebar" id="sidebar"></aside>
+  <header class="topbar">
+    <div class="brandmark grow">
+      <div class="logo">US</div>
+      <span class="truncate">Master Admin</span>
+    </div>
+    <span class="small muted truncate" id="ownerEmail"></span>
+    <button class="btn icon ghost" data-theme-toggle onclick="UI.theme.toggle()" aria-label="Toggle dark mode">🌙</button>
+  </header>
+  <main class="main" id="main"></main>
+  <nav class="tabbar" id="tabbar" aria-label="Sections"></nav>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/mock.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/api.js"></script>
+<script src="js/master.js"></script>
+</body>
+</html>
