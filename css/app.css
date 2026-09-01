@@ -556,8 +556,12 @@ tbody tr:hover{background:var(--card-2)}
   position:relative; border-radius:var(--r-lg); overflow:hidden; box-shadow:var(--shadow-lg);
   aspect-ratio:4/3; background:var(--card-2);
 }
+/* The hero is a full-bleed banner, so it keeps edge-to-edge `cover` framing —
+   the contain-plus-backdrop treatment above is only for product photos. */
 .hero-media .gallery{height:100%}
-.hero-media .gallery img,.hero-media .gallery .ph{height:100%; max-height:none}
+.hero-media .gal-slide{border-radius:0}
+.hero-media .gal-slide .gal-bg{display:none}
+.hero-media .gallery img,.hero-media .gallery .ph{height:100%; max-height:none; object-fit:cover}
 .hero-media .gal-dots{
   position:absolute; bottom:16px; left:50%; transform:translateX(-50%); margin:0;
   background:rgba(10,14,11,.35); padding:6px 8px; border-radius:var(--r-pill); backdrop-filter:blur(6px);
@@ -646,13 +650,27 @@ html{scroll-padding-top:76px}
 
 .gallery{display:flex; overflow-x:auto; scroll-snap-type:x mandatory; gap:8px; border-radius:var(--r-sm); scrollbar-width:none}
 .gallery::-webkit-scrollbar{display:none}
-.gallery img,.gallery .ph{
-  flex:0 0 100%; scroll-snap-align:center; aspect-ratio:1; object-fit:cover; border-radius:var(--r-sm); background:var(--card-2);
-  /* Cap the height instead of always going full-square: on a wide modal a
-     square photo at 100% width can be taller than the viewport, pushing the
-     price/description/quantity/Add-to-cart below the fold. */
-  max-height:min(270px,32dvh);
+/* The frame owns the height; the photo is never cropped inside it.
+   A fixed frame height keeps every product tidy and the same size regardless
+   of whether the seller uploaded a tall food shot, a wide banner or a square
+   logo, while `contain` guarantees nothing gets sliced off. The leftover space
+   is filled by a blurred copy of the same photo, so a mismatched ratio reads as
+   a deliberate backdrop instead of empty bars. */
+.gallery{height:clamp(220px, 40dvh, 340px)}
+.gal-slide{
+  flex:0 0 100%; scroll-snap-align:center; position:relative; height:100%;
+  border-radius:var(--r-sm); overflow:hidden; background:var(--card-2);
 }
+.gal-slide .gal-bg{
+  position:absolute; inset:0; background-size:cover; background-position:center;
+  filter:blur(26px) saturate(1.25); transform:scale(1.2); opacity:.5;
+}
+.gallery img,.gallery .ph{
+  position:relative; width:100%; height:100%; object-fit:contain;
+  border-radius:var(--r-sm); background:transparent;
+}
+.gallery > img,.gallery > .ph{flex:0 0 100%; scroll-snap-align:center; background:var(--card-2)}
+.gallery .ph{display:grid; place-items:center; font-size:34px}
 .gal-dots{display:flex; gap:6px; justify-content:center; margin-top:8px}
 .gal-dots i{width:6px;height:6px;border-radius:50%;background:var(--line-strong); transition:width var(--fast) var(--ease), background var(--fast) var(--ease)}
 .gal-dots i.on{background:var(--brand); width:18px; border-radius:3px}
