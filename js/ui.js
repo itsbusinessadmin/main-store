@@ -42,6 +42,29 @@
   const esc = s => String(s ?? "").replace(/[&<>"']/g, m =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
 
+  /* ---------- Icons ----------
+     Builds an <svg> from the shared US_ICONS path table. Icons are
+     decorative by default (aria-hidden), because in this app every one of
+     them sits next to a text label or on a button that already carries an
+     aria-label. Pass {label} for the rare standalone case. */
+  function icon(name, { size = null, cls = "", label = null, width = 2 } = {}) {
+    const body = w.US_ICONS?.[name];
+    if (!body) return null;
+    const host = el("div");
+    host.innerHTML =
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${width}" ` +
+      `stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+    const svg = host.firstElementChild;
+    svg.setAttribute("class", "i" + (cls ? " " + cls : ""));
+    if (size) { svg.style.width = size + "px"; svg.style.height = size + "px"; }
+    if (label) { svg.setAttribute("role", "img"); svg.setAttribute("aria-label", label); }
+    else svg.setAttribute("aria-hidden", "true");
+    return svg;
+  }
+
+  /* Icon + text on a button, spaced by .btn's own gap. */
+  const iconBtn = (name, ...kids) => [icon(name), ...kids];
+
   /* ---------- Images ----------
      File ids from the Worker look like "FILE-uuid" and are not URLs. Route
      everything through api.fileUrl(), which passes data: URLs straight through
@@ -108,7 +131,13 @@
       store.set("colorMode", mode);
       const meta = $('meta[name="theme-color"]');
       if (meta) meta.content = mode === "dark" ? "#0e120f" : "#f6f7f5";
-      $$("[data-theme-toggle]").forEach(b => b.textContent = mode === "dark" ? "\u2600\uFE0F" : "\u{1F319}");
+      $$("[data-theme-toggle]").forEach(b => {
+        mount(b, icon(mode === "dark" ? "sun" : "moon"));
+        /* Only the standalone icon buttons take the label; the sidebar rows
+           are <span>s inside a button that already reads "Theme". */
+        if (b.tagName === "BUTTON")
+          b.setAttribute("aria-label", mode === "dark" ? "Switch to light mode" : "Switch to dark mode");
+      });
     },
     toggle() {
       this.apply(document.documentElement.getAttribute("data-color-mode") === "dark" ? "light" : "dark");
@@ -142,7 +171,7 @@
         onClose && onClose();
       }, 180);
     };
-    const closeBtn = el("button", { class: "btn icon ghost", "aria-label": "Close", onclick: close }, "\u2715");
+    const closeBtn = el("button", { class: "btn icon ghost", "aria-label": "Close", onclick: close }, icon("x"));
     if (!side) sheet.append(el("div", { class: "grabber" }));
     sheet.append(el("div", { class: "sheet-h" }, el("h2", {}, title), closeBtn));
     const bodyEl = el("div", { class: "sheet-b" });
@@ -246,7 +275,7 @@
           img(id, { alt: "" }) || el("div", { class: "ph" }, "\u{1F5BC}\uFE0F"),
           el("button", { type: "button", class: "rm", "aria-label": "Remove photo", onclick: () => {
             list.splice(i, 1); onChange && onChange(list); paint();
-          } }, "\u2715"))),
+          } }, icon("x", { size: 15 })))),
         list.length < max
           ? el("button", { type: "button", class: "img-tile add", "aria-label": label, onclick: () => input.click() }, "+")
           : null);
@@ -327,7 +356,7 @@
     });
   }
 
-  w.UI = { $, $$, el, mount, esc, img, fileSrc, imgFallback, imagePicker, imageListPicker, dl, dlRow,
+  w.UI = { $, $$, el, mount, esc, icon, iconBtn, img, fileSrc, imgFallback, imagePicker, imageListPicker, dl, dlRow,
            money, dateFmt, dateTimeFmt, daysLeft, store, theme, toast, modal,
            confirmDialog, debounce, uid, fileToDataURL, copy, skeletons, empty, sortable };
 })(window);

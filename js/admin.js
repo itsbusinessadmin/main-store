@@ -9,7 +9,7 @@
        clickable step chips, and a product step that is genuinely optional
 */
 (function () {
-  const { $, $$, el, mount, img, imgFallback, imagePicker, imageListPicker, dl, dlRow, money, dateFmt,
+  const { $, $$, el, mount, icon, img, imgFallback, imagePicker, imageListPicker, dl, dlRow, money, dateFmt,
           dateTimeFmt, store, theme, toast, modal, confirmDialog, debounce,
           fileToDataURL, copy, skeletons, empty, sortable } = UI;
 
@@ -188,7 +188,7 @@
       }, el("span", { class: "ico" }, n.ico), n.label)),
       el("div", { style: "margin-top:auto" }),
       el("button", { class: "nav-item", onclick: () => theme.toggle() },
-        el("span", { class: "ico", "data-theme-toggle": "" }, "\u{1F319}"), "Theme"),
+        el("span", { class: "ico", "data-theme-toggle": "" }, icon("moon")), "Theme"),
       el("button", { class: "nav-item", onclick: logout }, el("span", { class: "ico" }, "\u21A9\uFE0E"), "Sign out"));
     mount(tabs, ...NAV.filter(n => allowed.includes(n.id)).map(n => el("button", {
       "aria-current": S.section === n.id ? "page" : null, onclick: () => go(n.id)
@@ -321,7 +321,7 @@
     mount(m,
       header("Orders", "Tap an order to view details or change its status",
         [el("button", { class: "btn ghost sm", onclick: exportCsv }, "Export CSV")]),
-      el("div", { class: "searchbar mb" }, el("span", { class: "ico" }, "\u{1F50D}"),
+      el("div", { class: "searchbar mb" }, el("span", { class: "ico" }, icon("search")),
         el("input", { class: "input", placeholder: "Search order no., name or mobile\u2026",
           oninput: debounce(e => { q = e.target.value.trim(); load(); }, 300) })),
       chips, list);
@@ -420,7 +420,7 @@
           el("div", { class: "li-sub" },
             `${money(p.price)} \u00b7 ${p.stock > 0 ? p.stock + " in stock" : "Sold out"}` +
             (p.variant_groups?.length ? ` \u00b7 ${p.variant_groups.length} variant group(s)` : ""))),
-        el("button", { class: "btn ghost sm", onclick: () => editProduct(p) }, "Edit")))
+        el("button", { class: "btn ghost sm", onclick: () => editProduct(p) }, icon("pencil"), "Edit")))
         : [empty("\u{1F4E6}", "No products yet", "Add your first product to open for business.")]));
       sortable(list, ids => api.storeReorderProducts(ids)
         .then(() => toast("Order saved", "ok")).catch(e => toast(e.message, "err")));
@@ -438,7 +438,7 @@
             if (!await confirmDialog({ title: "Delete category?",
               message: `Products in "${c.name}" will move to Uncategorized.`, confirmText: "Delete", danger: true })) return;
             await api.storeDeleteCategory(c.category_id); toast("Category deleted", "ok"); renderSection();
-          } }, "Delete")))));
+          } }, icon("trash"), "Delete")))));
 
     mount(m,
       header("Catalog", `${prods.length} product(s) \u00b7 ${categories.length} categor${categories.length === 1 ? "y" : "ies"}`, [
@@ -486,7 +486,7 @@
             el("div", { class: "row between mb" },
               el("input", { class: "input", value: g.name, placeholder: "Group name (e.g. Size)",
                 oninput: e => g.name = e.target.value }),
-              el("button", { class: "btn ghost sm", onclick: () => { F.variant_groups.splice(gi, 1); paintVariants(); } }, "Remove")),
+              el("button", { class: "btn ghost sm", onclick: () => { F.variant_groups.splice(gi, 1); paintVariants(); } }, icon("trash", { size: 15 }), "Remove")),
             el("label", { class: "row", style: "gap:6px;align-items:center;margin-bottom:10px;font-size:.85rem" },
               el("input", { type: "checkbox", checked: g.required !== false,
                 onchange: e => { g.required = e.target.checked; } }),
@@ -497,7 +497,7 @@
               el("input", { class: "input", type: "number", style: "max-width:120px", value: g.price_delta?.[oi] ?? 0,
                 placeholder: "+price",
                 oninput: e => { g.price_delta = g.price_delta || []; g.price_delta[oi] = Number(e.target.value) || 0; } }),
-              el("button", { class: "btn ghost sm", onclick: () => { g.options.splice(oi, 1); g.price_delta?.splice(oi, 1); paintVariants(); } }, "\u2715"))),
+              el("button", { class: "btn ghost sm", onclick: () => { g.options.splice(oi, 1); g.price_delta?.splice(oi, 1); paintVariants(); } }, icon("x", { size: 15 })))),
             el("button", { class: "btn ghost sm", onclick: () => { g.options.push(""); (g.price_delta = g.price_delta || []).push(0); paintVariants(); } }, "Add option"))),
           el("button", { class: "btn ghost sm", onclick: () => { F.variant_groups.push({ name: "", options: [""], price_delta: [0], required: true }); paintVariants(); } }, "Add variant group"));
       };
@@ -528,7 +528,7 @@
             if (!await confirmDialog({ title: "Delete product?",
               message: `"${p.name}" will be removed from your storefront.`, confirmText: "Delete", danger: true })) return;
             await api.storeDeleteProduct(p.product_id); mm.close(); toast("Product deleted", "ok"); renderSection();
-          } }, "Delete") : null,
+          } }, icon("trash"), "Delete") : null,
           save]
       });
 
@@ -561,7 +561,7 @@
           el("div", { class: "li-sub" }, [p.account_name, p.account_number].filter(Boolean).join(" \u00b7 ") || "No account details"),
           el("div", { class: "li-sub" },
             ((p.valid_for || []).join(", ") || "all fulfillment types") + (p.requires_proof ? " \u00b7 proof required" : ""))),
-        el("button", { class: "btn ghost sm", onclick: () => editMethod(p) }, "Edit")))
+        el("button", { class: "btn ghost sm", onclick: () => editMethod(p) }, icon("pencil"), "Edit")))
         : [empty("\u{1F4B3}", "No payment methods yet", "Add at least one so customers can check out.")])));
 
     function editMethod(p) {
@@ -603,7 +603,7 @@
             if (!await confirmDialog({ title: "Delete payment method?",
               message: `"${p.name}" will no longer be offered at checkout.`, confirmText: "Delete", danger: true })) return;
             await api.storeDeletePaymentMethod(p.method_id); mm.close(); toast("Deleted", "ok"); renderSection();
-          } }, "Delete") : null,
+          } }, icon("trash"), "Delete") : null,
           save]
       });
 
@@ -636,7 +636,7 @@
     const paintLocs = () => mount(locBox,
       ...D.meetup.locations.map((l, i) => el("div", { class: "row", style: "gap:8px" },
         el("input", { class: "input", value: l, oninput: e => D.meetup.locations[i] = e.target.value }),
-        el("button", { class: "btn ghost sm", onclick: () => { D.meetup.locations.splice(i, 1); paintLocs(); } }, "\u2715"))),
+        el("button", { class: "btn ghost sm", onclick: () => { D.meetup.locations.splice(i, 1); paintLocs(); } }, icon("x", { size: 15 })))),
       el("button", { class: "btn ghost sm", onclick: () => { D.meetup.locations.push(""); paintLocs(); } }, "Add location"));
     paintLocs();
 
@@ -709,7 +709,7 @@
         el("label", { class: "switch" },
           el("input", { type: "checkbox", checked: !!c.visible, onchange: e => c.visible = e.target.checked ? 1 : 0 }),
           el("span", { class: "track" }), el("span", { class: "xs" }, "Show")),
-        el("button", { class: "btn ghost sm", onclick: () => { F.contact.splice(i, 1); paintContacts(); } }, "\u2715"))),
+        el("button", { class: "btn ghost sm", onclick: () => { F.contact.splice(i, 1); paintContacts(); } }, icon("x", { size: 15 })))),
       el("button", { class: "btn ghost sm", onclick: () => { F.contact.push({ type: "mobile", value: "", visible: 1 }); paintContacts(); } }, "Add contact"));
     paintContacts();
 
