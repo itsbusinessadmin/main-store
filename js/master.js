@@ -18,9 +18,13 @@
     { id: "stores",    label: "Stores",    ico: "\u{1F3EA}" },
     { id: "payments",  label: "Approvals", ico: "\u2705" },
     { id: "plans",     label: "Plans",     ico: "\u{1F39F}\uFE0F" },
-    { id: "methods",   label: "Payments",  ico: "\u{1F4B3}" }
+    { id: "methods",   label: "Payments",  ico: "\u{1F4B3}" },
+    { id: "usage",     label: "Usage",     ico: "\u{1F4C8}" }
   ];
-  const S = { section: "dashboard", email: null };
+  /* usageAlerts drives the dot on the Usage nav entry. It is seeded from the
+     dashboard (which returns the count cached by the last probe) and refreshed
+     whenever the Usage tab itself probes. */
+  const S = { section: "dashboard", email: null, usageAlerts: 0 };
 
   const STATUS_TONE = { ACTIVE: "ok", PENDING_VERIFICATION: "warn", EXPIRED: "danger", SUSPENDED: "danger", ARCHIVED: "" };
 
@@ -124,7 +128,7 @@
         el("div", { class: "logo" }, "US"), el("span", {}, "Master Admin")),
       ...NAV.map(n => el("button", {
         class: "nav-item", "aria-current": S.section === n.id ? "page" : null, onclick: () => go(n.id)
-      }, el("span", { class: "ico" }, n.ico), n.label)),
+      }, el("span", { class: "ico" }, n.ico), n.label, alertDot(n.id))),
       el("div", { style: "margin-top:auto" }),
       el("button", { class: "nav-item", onclick: () => theme.toggle() },
         el("span", { class: "ico", "data-theme-toggle": "" }, icon("moon")), "Theme"),
@@ -132,7 +136,7 @@
 
     mount($("#tabbar"), ...NAV.map(n => el("button", {
       "aria-current": S.section === n.id ? "page" : null, onclick: () => go(n.id)
-    }, el("span", { class: "ico" }, n.ico), n.label)));
+    }, el("span", { class: "ico" }, n.ico), n.label, alertDot(n.id))));
     theme.init();
   }
 
@@ -145,6 +149,27 @@
     el("div", {}, el("h1", {}, t), s ? el("div", { class: "sub" }, s) : null),
     a && a.length ? el("div", { class: "btn-group" }, ...a.filter(Boolean)) : null);
 
+  /* Only the Usage section raises alerts today; keyed by section id so another
+     one can start doing it without touching renderNav(). */
+  const alertDot = sectionId => sectionId === "usage" && S.usageAlerts > 0
+    ? el("span", {
+        class: "alert-dot", role: "img",
+        "aria-label": `${S.usageAlerts} service${S.usageAlerts === 1 ? "" : "s"} need attention`,
+        title: `${S.usageAlerts} service${S.usageAlerts === 1 ? "" : "s"} need attention`
+      })
+    : null;
+
+  /* Binary units, because that is what every one of these dashboards quotes. */
+  const bytesFmt = n => {
+    const b = Number(n) || 0;
+    if (b <= 0) return "\u2014";
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    const i = Math.min(units.length - 1, Math.floor(Math.log(b) / Math.log(1024)));
+    const v = b / Math.pow(1024, i);
+    return `${v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
+  };
+  const msFmt = n => (Number(n) > 0 ? `${Math.round(n)} ms` : "\u2014");
+
   const stat = (k, v, sub, small) => el("div", { class: "stat" },
     el("div", { class: "k" }, k),
     el("div", { class: "v" + (small ? " sm" : "") }, v),
@@ -154,7 +179,7 @@
     const m = $("#main");
     mount(m, el("div", { class: "col" }, ...skeletons(3, "skel line"), el("div", { class: "skel card mt" })));
     const map = { dashboard: viewDashboard, stores: viewStores, payments: viewPayments,
-                  plans: viewPlans, methods: viewMethods };
+                  plans: viewPlans, methods: viewMethods, usage: viewUsage };
     try {
       // Boot already fetched the dashboard once to confirm the saved session
       // is still valid — reuse that response instead of fetching it again.
@@ -171,6 +196,10 @@
   async function viewDashboard(m) { renderDashboard(m, await api.masterDashboard()); }
 
   function renderDashboard(m, d) {
+    if (typeof d.usage_alerts === "number" && d.usage_alerts !== S.usageAlerts) {
+      S.usageAlerts = d.usage_alerts;
+      renderNav();
+    }
     mount(m,
       header("Platform overview", S.email ? `Signed in as ${S.email}` : null),
       d.pending_payments ? el("div", { class: "notice warn" },
@@ -480,6 +509,195 @@
         catch (e) { toast(e.message, "err"); save.disabled = false; }
       };
     }
+  }
+
+  /* ================= Usage & health =================
+     Two things live here. The built-in block is what this stack can measure
+     about itself (D1 and KV) and needs no setup. Below it are third-party
+     tools the owner registers -- Supabase and the like -- which the Worker
+     probes on each visit.
+
+     Credentials never pass through this screen: a service stores the NAME of a
+     Worker secret, and the Worker reads the value from its own environment at
+     probe time. The form asks for the name only, and the API returns only
+     whether one is set. */
+  const SVC_TONE = { ok: "ok", warn: "warn", down: "danger", paused: "" };
+  const SVC_TEXT = { ok: "Healthy", warn: "Needs attention", down: "Not responding", paused: "Paused" };
+
+  async function viewUsage(m) {
+    const d = await api.masterUsage();
+    S.usageAlerts = d.alerts || 0;
+    renderNav();
+    renderUsage(m, d);
+  }
+
+  function renderUsage(m, d) {
+    const refresh = el("button", { class: "btn ghost sm" }, "Refresh");
+    refresh.onclick = async () => {
+      refresh.disabled = true; refresh.textContent = "Checking…";
+      try { await viewUsage(m); } catch (e) { toast(e.message, "err"); refresh.disabled = false; }
+    };
+
+    const b = d.builtin || {};
+    const d1 = b.d1 || {}, kv = b.kv || {};
+
+    /* One bar per service, coloured by the same grade as its badge. */
+    const meter = (used, limit, status) => {
+      /* No limit set, or nothing came back to measure (a service that is down
+         reports zero) -- an empty bar reading "— of 2 GB" says less than
+         leaving it out. */
+      if (!limit || limit <= 0 || !used || used <= 0) return null;
+      const pct = Math.min(100, Math.round((used / limit) * 100));
+      return el("div", {},
+        el("div", { class: "meter " + (status === "down" ? "danger" : status === "warn" ? "warn" : "") },
+          el("i", { style: `width:${pct}%` })),
+        el("div", { class: "xs muted", style: "margin-top:5px" },
+          `${bytesFmt(used)} of ${bytesFmt(limit)} · ${pct}%`));
+    };
+
+    const serviceRow = sv => el("div", { class: "list-item" },
+      el("div", { class: "grow", style: "min-width:0" },
+        el("div", { class: "row", style: "gap:8px;align-items:center" },
+          el("span", { class: "li-title truncate" }, sv.name),
+          el("span", { class: "badge " + (SVC_TONE[sv.status] ?? "") }, SVC_TEXT[sv.status] || sv.status)),
+        el("div", { class: "li-sub truncate" },
+          [sv.provider === "supabase" ? "Supabase" : "Custom",
+           `Latency ${msFmt(sv.latency_ms)}`,
+           sv.has_secret ? `Key: ${sv.secret_name}` : "No key configured",
+           sv.note || null].filter(Boolean).join(" · ")),
+        meter(sv.used_bytes, sv.limit_bytes, sv.status)),
+      el("button", { class: "btn ghost sm", onclick: () => editService(sv) }, icon("pencil"), "Edit"));
+
+    const services = d.services || [];
+    const problems = services.filter(sv => sv.status === "warn" || sv.status === "down");
+
+    mount(m,
+      header("Usage & health",
+        d.checked_at ? `Last checked ${dateTimeFmt(d.checked_at)}` : null,
+        [refresh, el("button", { class: "btn primary sm", onclick: () => editService(null) }, "Add service")]),
+
+      problems.length
+        ? el("div", { class: "notice danger" },
+            el("strong", {},
+              `${problems.length} service${problems.length === 1 ? "" : "s"} need${problems.length === 1 ? "s" : ""} attention`),
+            el("span", {}, problems.map(x => `${x.name} — ${x.note || SVC_TEXT[x.status]}`).join(" · ")))
+        : el("div", { class: "notice ok" },
+            el("strong", {}, "Everything is responding"),
+            el("span", {}, "No service is over its limit or running slow.")),
+
+      el("h3", { class: "sec-h mt-lg" }, "This platform"),
+      el("div", { class: "stats" },
+        stat("Database", d1.ok ? bytesFmt(d1.size_bytes) : "Unavailable",
+          d1.ok ? `${(d1.rows_total || 0).toLocaleString()} rows` : d1.error),
+        stat("DB response", d1.ok ? msFmt(d1.latency_ms) : "—", "Measured just now"),
+        stat("Files stored", kv.ok ? bytesFmt(kv.size_bytes) : "Unavailable",
+          kv.ok ? `${kv.files || 0} file(s)` : kv.error),
+        stat("File store response", kv.ok ? msFmt(kv.latency_ms) : "—", "Measured just now")),
+
+      kv.truncated
+        ? el("div", { class: "hint mt" },
+            "Only the first 1,000 files were counted, so the total above is a floor, not the full figure.")
+        : null,
+      kv.ok && kv.files && kv.files_sized < kv.files
+        ? el("div", { class: "hint mt" },
+            `${kv.files - kv.files_sized} file(s) were uploaded before sizes were recorded, so storage is under-reported by that much.`)
+        : null,
+
+      d1.ok && d1.counts
+        ? el("div", { class: "card mt" },
+            el("h4", { class: "sec-h" }, "Rows by table"),
+            dl(...Object.entries(d1.counts).map(([k, v]) =>
+              dlRow(k.replace(/_/g, " "), Number(v).toLocaleString()))))
+        : null,
+
+      el("h3", { class: "sec-h mt-lg" }, "Connected tools"),
+      d.schema_ready === false
+        ? el("div", { class: "notice warn" },
+            el("strong", {}, "Run the schema update to connect tools"),
+            el("span", {}, "The usage_services table isn't in the database yet. Apply cloudflare/schema.sql to the D1 database, then reload this page. The platform figures above work regardless."))
+        : null,
+      services.length
+        ? el("div", { class: "list" }, ...services.map(serviceRow))
+        : el("div", { class: "card" },
+            empty(icon("search"), "No tools connected yet",
+              "Add Supabase or anything else with a status URL, and its storage and latency will show up here.",
+              el("button", { class: "btn primary mt", onclick: () => editService(null) }, "Add service"))),
+
+      el("div", { class: "hint mt-lg" },
+        "Keys are never stored here. Run ", el("code", {}, "wrangler secret put NAME"),
+        " on the Worker, then put that NAME in the service below — the Worker reads the value itself and it never reaches this page."));
+  }
+
+  function editService(sv) {
+    const F = {
+      service_id: sv?.service_id,
+      name: sv?.name || "", provider: sv?.provider || "generic",
+      endpoint: sv?.endpoint || "", secret_name: sv?.secret_name || "",
+      /* Limits are entered in MB, which is how these plans are actually sold. */
+      limit_mb: sv?.limit_bytes ? Math.round(sv.limit_bytes / (1024 * 1024)) : "",
+      warn_pct: sv?.warn_pct ?? 80, warn_ms: sv?.warn_ms ?? 1500,
+      is_active: sv?.is_active === 0 ? 0 : 1
+    };
+
+    const save = el("button", { class: "btn primary" }, "Save service");
+    const mm = modal({
+      title: sv ? "Edit service" : "Add service", wide: true,
+      body: el("div", {},
+        el("div", { class: "field" }, el("label", {}, "Name"),
+          el("input", { class: "input", value: F.name, placeholder: "Supabase — main project",
+            oninput: e => F.name = e.target.value })),
+        el("div", { class: "field" }, el("label", {}, "Type"),
+          el("select", { class: "select", onchange: e => F.provider = e.target.value },
+            el("option", { value: "generic", selected: F.provider === "generic" }, "Custom (any HTTPS status URL)"),
+            el("option", { value: "supabase", selected: F.provider === "supabase" }, "Supabase"))),
+        el("div", { class: "field" }, el("label", {}, "Check URL"),
+          el("input", { class: "input", value: F.endpoint, placeholder: "https://xxxx.supabase.co/rest/v1/",
+            oninput: e => F.endpoint = e.target.value }),
+          el("div", { class: "hint" }, "Must be https. The Worker requests this and times the round trip. If it answers with JSON containing used_bytes, db_size or size, that figure is used for storage.")),
+        el("div", { class: "field" }, el("label", {}, "Worker secret name"),
+          el("input", { class: "input", value: F.secret_name, placeholder: "SUPABASE_SERVICE_KEY",
+            oninput: e => F.secret_name = e.target.value }),
+          el("div", { class: "hint" }, "The name only — never the key itself. Leave empty for a public status URL.")),
+        el("div", { class: "grid-2" },
+          el("div", { class: "field" }, el("label", {}, "Storage limit (MB)"),
+            el("input", { class: "input", type: "number", min: "0", value: F.limit_mb, placeholder: "500",
+              oninput: e => F.limit_mb = e.target.value }),
+            el("div", { class: "hint" }, "Leave blank if the tool has no storage cap.")),
+          el("div", { class: "field" }, el("label", {}, "Warn at (% of limit)"),
+            el("input", { class: "input", type: "number", min: "1", max: "100", value: F.warn_pct,
+              oninput: e => F.warn_pct = e.target.value }))),
+        el("div", { class: "field" }, el("label", {}, "Warn above this response time (ms)"),
+          el("input", { class: "input", type: "number", min: "0", value: F.warn_ms,
+            oninput: e => F.warn_ms = e.target.value })),
+        el("label", { class: "row", style: "gap:8px;align-items:center" },
+          el("input", { type: "checkbox", checked: F.is_active === 1,
+            onchange: e => F.is_active = e.target.checked ? 1 : 0 }),
+          el("span", {}, "Check this service on every visit"))),
+      footer: [
+        sv ? el("button", { class: "btn danger", onclick: async () => {
+          if (!await confirmDialog({ title: "Remove this service?",
+            message: `"${sv.name}" will no longer be checked.`, confirmText: "Remove", danger: true })) return;
+          await api.masterDeleteUsageService(sv.service_id);
+          mm.close(); toast("Service removed", "ok"); renderSection();
+        } }, icon("trash"), "Delete") : null,
+        save]
+    });
+
+    save.onclick = async () => {
+      if (!F.name.trim()) return toast("Give this service a name.");
+      if (!/^https:\/\//i.test(F.endpoint.trim())) return toast("The check URL must start with https://");
+      save.disabled = true;
+      try {
+        await api.masterSaveUsageService({ service: {
+          service_id: F.service_id, name: F.name.trim(), provider: F.provider,
+          endpoint: F.endpoint.trim(), secret_name: F.secret_name.trim(),
+          limit_bytes: Math.max(0, Number(F.limit_mb) || 0) * 1024 * 1024,
+          warn_pct: Number(F.warn_pct) || 80, warn_ms: Number(F.warn_ms) || 1500,
+          is_active: F.is_active
+        } });
+        toast("Service saved", "ok"); mm.close(); renderSection();
+      } catch (e) { toast(e.message, "err"); save.disabled = false; }
+    };
   }
 
   /* ================= Platform payment methods ================= */

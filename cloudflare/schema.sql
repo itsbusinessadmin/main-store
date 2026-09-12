@@ -168,6 +168,33 @@ CREATE TABLE IF NOT EXISTS master_payment_methods (
   is_active       INTEGER NOT NULL DEFAULT 1
 );
 
+-- Third-party tools the platform owner wants to keep an eye on (Supabase and
+-- friends). Credentials are deliberately NOT stored here: secret_name is the
+-- name of a Worker secret (`wrangler secret put <name>`), so the token lives in
+-- the Worker's environment and never reaches D1 or the browser.
+-- The last_* columns cache the most recent probe so the master dashboard can
+-- show a warning without re-probing every service on every page load.
+CREATE TABLE IF NOT EXISTS usage_services (
+  service_id      TEXT PRIMARY KEY,
+  name            TEXT NOT NULL,
+  provider        TEXT NOT NULL DEFAULT 'generic',  -- 'supabase' | 'generic'
+  endpoint        TEXT NOT NULL,
+  secret_name     TEXT DEFAULT '',
+  limit_bytes     INTEGER DEFAULT 0,                -- 0 = no limit known
+  warn_pct        INTEGER DEFAULT 80,               -- % of limit that counts as a problem
+  warn_ms         INTEGER DEFAULT 1500,             -- latency above this counts as a problem
+  is_active       INTEGER NOT NULL DEFAULT 1,
+  sort            INTEGER DEFAULT 0,
+  last_status     TEXT DEFAULT '',                  -- 'ok' | 'warn' | 'down'
+  last_latency_ms INTEGER DEFAULT 0,
+  last_used_bytes INTEGER DEFAULT 0,
+  last_note       TEXT DEFAULT '',
+  last_checked_at TEXT,
+  created_at      TEXT,
+  updated_at      TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_usage_sort ON usage_services(sort, name);
+
 -- Starter data
 INSERT OR IGNORE INTO subscription_plans (plan_id, name, price, duration_days, blurb, is_active) VALUES
   ('PLAN-STARTER','Starter', 299, 30,  '1 store, unlimited products', 1),
