@@ -231,6 +231,11 @@ code{font-family:var(--mono); font-size:.92em}
 .btn.sm .i{width:1.05em; height:1.05em}
 .btn.icon .i{width:20px; height:20px}
 .btn.lg .i{width:1.2em; height:1.2em}
+/* The add-to-cart icon earns its place on a phone, where the sheet is narrow
+   and the glyph reads faster than the label. From tablet width up there is
+   room for the words alone, and dropping the icon leaves a cleaner button. */
+@media (min-width:760px){ .btn.add-cart .i{display:none} }
+
 /* A trash or x inside a destructive button should read as destructive too. */
 .btn.ghost.danger-text{color:var(--danger); border-color:transparent}
 .btn.ghost.danger-text:hover{background:color-mix(in srgb, var(--danger) 10%, transparent)}
@@ -421,7 +426,10 @@ code{font-family:var(--mono); font-size:.92em}
 @media (min-width:1024px){ .tabbar{display:none} }
 .tabbar::-webkit-scrollbar{display:none}
 .tabbar button{
-  flex:1 0 auto; min-width:72px; scroll-snap-align:start;
+  /* 60px keeps six tabs on a 360px phone without scrolling (master admin gained
+     a sixth section); flex-grow still spreads them across wider screens, and
+     the bar stays scrollable if a seventh ever arrives. */
+  flex:1 0 auto; min-width:60px; scroll-snap-align:start;
   min-height:var(--nav-h); display:flex; flex-direction:column; align-items:center;
   justify-content:center; gap:3px; font-size:10px; font-weight:650; color:var(--muted);
   transition:color var(--fast) var(--ease); position:relative;
@@ -507,6 +515,26 @@ tbody tr:hover{background:var(--card-2)}
     font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:.04em; text-align:left;
   }
 }
+
+/* ---------- Usage meters + alert dot ---------- */
+/* A thin bar under a service row: how much of its quota is gone. The fill is
+   coloured by the same ok/warn/danger grade the badge uses, so the row reads
+   the same way whether you scan the colour or the number. */
+.meter{height:6px; border-radius:var(--r-pill); background:var(--card-3); overflow:hidden; margin-top:8px}
+.meter > i{display:block; height:100%; border-radius:inherit; background:var(--ok);
+  transition:width var(--slow,.4s) var(--ease)}
+.meter.warn > i{background:var(--warn)}
+.meter.danger > i{background:var(--danger)}
+
+/* Marks a nav entry whose section has something wrong. Sits after the label so
+   it survives the sidebar's flex layout and the tab bar's stacked one. */
+.nav-item .alert-dot,.tabbar button .alert-dot{
+  width:8px; height:8px; border-radius:50%; background:var(--danger); flex:0 0 auto;
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--danger) 22%, transparent);
+}
+.nav-item .alert-dot{margin-left:auto}
+.tabbar button{position:relative}
+.tabbar button .alert-dot{position:absolute; top:6px; right:calc(50% - 16px)}
 
 .list{display:flex; flex-direction:column; gap:10px}
 .list-item{

@@ -89,7 +89,11 @@ async function putFile(env, dataUrl, kind = "misc") {
   const b64 = dataUrl.split(",")[1];
   if (b64.length * 0.75 > 3_000_000) bad("That image is too large. Please use one under 3 MB.", "VALIDATION");
   const id = `FILE-${uuid()}`;
-  await env.FILES.put(id, dataUrl, { metadata: { kind, created_at: nowIso() } });
+  /* Size is recorded at write time because KV cannot report total storage;
+     the Usage tab sums these instead of fetching every object back. */
+  await env.FILES.put(id, dataUrl, {
+    metadata: { kind, created_at: nowIso(), bytes: dataUrl.length }
+  });
   return id;
 }
 
@@ -554,8 +558,14 @@ A.master_dashboard = async (env, body, ctx) => {
     one("SELECT COALESCE(SUM(amount),0) n FROM subscription_payments WHERE status='APPROVED'"),
     env.DB.prepare("SELECT * FROM stores ORDER BY created_at DESC LIMIT 5").all()
   ]);
+  /* Cached from the last Usage probe -- reading it is a single cheap query, so
+     the sidebar can flag a problem without hitting every third-party tool. */
+  const usageAlerts = await one(
+    "SELECT COUNT(*) n FROM usage_services WHERE is_active=1 AND last_status IN ('warn','down')"
+  ).catch(() => ({ n: 0 }));
+
   return { total: total.n, active: active.n, expired: expired.n, pending_payments: pendingPay.n,
-           revenue: revenue.n, recent_stores: recent.results };
+           revenue: revenue.n, recent_stores: recent.results, usage_alerts: usageAlerts?.n || 0 };
 };
 
 A.master_list_stores = async (env, body, ctx) => {
@@ -657,6 +667,230 @@ A.master_review_payment = async (env, body, ctx) => {
       .bind(pay.plan_id, nowIso(), addDays(base, plan?.duration_days || 30),
         signup ? "INITIAL_SETUP" : "FULL_ADMIN", signup ? 0 : 1, pay.store_id)
   ]);
+  return { ok: true };
+};
+
+/* ---- Usage & health ----
+   Two sources feed the master admin's Usage tab.
+
+   Built-in: whatever this stack can report about itself. D1 returns the
+   database size in each query's meta (size_after), so a cheap COUNT doubles as
+   both a row count and a size reading, and timing that same round trip gives a
+   real latency number rather than a guess.
+
+   Registered services: third-party tools the owner adds (Supabase and the
+   like). Their tokens are never stored in D1 -- a row holds the NAME of a
+   Worker secret, and the value is read from env at probe time, so nothing
+   sensitive is written to the database or sent to the browser. */
+
+const USAGE_TIMEOUT_MS = 6000;
+const MAX_KV_KEYS = 1000;
+
+const shapeService = r => ({
+  service_id: r.service_id, name: r.name, provider: r.provider, endpoint: r.endpoint,
+  /* Only whether a secret is configured, never which one or its value. */
+  has_secret: !!(r.secret_name || "").trim(),
+  secret_name: r.secret_name || "",
+  limit_bytes: r.limit_bytes || 0, warn_pct: r.warn_pct || 80, warn_ms: r.warn_ms || 1500,
+  is_active: r.is_active, sort: r.sort || 0,
+  last_status: r.last_status || "", last_latency_ms: r.last_latency_ms || 0,
+  last_used_bytes: r.last_used_bytes || 0, last_note: r.last_note || "",
+  last_checked_at: r.last_checked_at || null
+});
+
+/* ok | warn | down, from one place so the tab and the dashboard badge agree. */
+function gradeService(svc, { ok, latency_ms, used_bytes, note }) {
+  if (!ok) return { status: "down", note: note || "No response" };
+  const reasons = [];
+  if (svc.warn_ms && latency_ms > svc.warn_ms) reasons.push(`Slow (${latency_ms} ms)`);
+  if (svc.limit_bytes > 0 && used_bytes > 0) {
+    const pct = Math.round((used_bytes / svc.limit_bytes) * 100);
+    if (pct >= (svc.warn_pct || 80)) reasons.push(`${pct}% of limit used`);
+  }
+  return reasons.length ? { status: "warn", note: reasons.join(" · ") }
+                        : { status: "ok", note: note || "" };
+}
+
+async function probeBuiltin(env) {
+  const out = { d1: { ok: false }, kv: { ok: false } };
+
+  const t0 = Date.now();
+  try {
+    /* One statement per table, batched into a single round trip. The last
+       result's meta carries the database size, which is a property of the DB
+       rather than of the query. */
+    const tables = ["stores", "products", "orders", "order_items", "subscription_payments"];
+    const rows = await env.DB.batch(
+      tables.map(t => env.DB.prepare(`SELECT COUNT(*) n FROM ${t}`))
+    );
+    const counts = {};
+    tables.forEach((t, i) => { counts[t] = rows[i]?.results?.[0]?.n ?? 0; });
+    const sizes = rows.map(r => r.meta?.size_after).filter(n => typeof n === "number");
+    out.d1 = {
+      ok: true,
+      latency_ms: Date.now() - t0,
+      size_bytes: sizes.length ? Math.max(...sizes) : 0,
+      rows_total: Object.values(counts).reduce((a, b) => a + b, 0),
+      counts
+    };
+  } catch (e) {
+    out.d1 = { ok: false, latency_ms: Date.now() - t0, error: e.message };
+  }
+
+  const t1 = Date.now();
+  try {
+    /* KV has no "total bytes" API. Uploads record their size in metadata, so
+       this is exact for anything stored since that landed and an undercount for
+       older files -- reported rather than quietly rounded. */
+    const list = await env.FILES.list({ limit: MAX_KV_KEYS });
+    let bytes = 0, sized = 0;
+    for (const k of list.keys) {
+      const n = Number(k.metadata?.bytes) || 0;
+      if (n) { bytes += n; sized++; }
+    }
+    out.kv = {
+      ok: true, latency_ms: Date.now() - t1,
+      files: list.keys.length, files_sized: sized,
+      size_bytes: bytes,
+      truncated: !list.list_complete
+    };
+  } catch (e) {
+    out.kv = { ok: false, latency_ms: Date.now() - t1, error: e.message };
+  }
+
+  return out;
+}
+
+async function probeService(env, svc) {
+  const token = (svc.secret_name || "").trim() ? env[svc.secret_name.trim()] : null;
+  const headers = { Accept: "application/json" };
+  if (token) {
+    headers["Authorization"] = "Bearer " + token;
+    /* Supabase's REST endpoints want the key under apikey as well. */
+    if (svc.provider === "supabase") headers["apikey"] = token;
+  }
+
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), USAGE_TIMEOUT_MS);
+  const t0 = Date.now();
+  try {
+    const res = await fetch(svc.endpoint, { headers, signal: ctl.signal, cf: { cacheTtl: 0 } });
+    const latency_ms = Date.now() - t0;
+
+    let used_bytes = 0, note = "";
+    const ct = res.headers.get("Content-Type") || "";
+    if (ct.includes("json")) {
+      const body = await res.json().catch(() => null);
+      if (body && typeof body === "object") {
+        /* Accept the handful of field names these endpoints actually use;
+           anything else just reports up/down and latency. */
+        used_bytes = Number(
+          body.used_bytes ?? body.db_size ?? body.database_size ?? body.disk_usage ?? body.size ?? 0
+        ) || 0;
+        if (typeof body.status === "string") note = body.status;
+      }
+    }
+
+    if (!res.ok) {
+      return { ok: false, latency_ms, used_bytes: 0, note: `HTTP ${res.status}` };
+    }
+    return { ok: true, latency_ms, used_bytes, note };
+  } catch (e) {
+    return {
+      ok: false, latency_ms: Date.now() - t0, used_bytes: 0,
+      note: e.name === "AbortError" ? `No response in ${USAGE_TIMEOUT_MS / 1000}s` : e.message
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+A.master_usage = async (env, body, ctx) => {
+  await masterEmail(env, ctx.req, body);
+
+  /* An existing deployment will not have this table until schema.sql is re-run.
+     That should show up as "no tools connected yet" plus a note, not as a
+     broken page -- the built-in D1 and KV figures below still work. */
+  let services = [], schema_ready = true;
+  try {
+    const rows = await env.DB.prepare(
+      "SELECT * FROM usage_services ORDER BY sort, name").all();
+    services = rows.results.map(shapeService);
+  } catch {
+    schema_ready = false;
+  }
+
+  const builtin = await probeBuiltin(env);
+
+  /* Probe every active service at once; one slow tool shouldn't hold up the
+     rest, and each already has its own timeout. */
+  const active = services.filter(s => s.is_active);
+  const probes = await Promise.all(active.map(async svc => {
+    const raw = await probeService(env, svc);
+    const graded = gradeService(svc, raw);
+    return { ...svc, ...raw, ...graded };
+  }));
+
+  const checked_at = nowIso();
+  if (probes.length) {
+    await env.DB.batch(probes.map(p => env.DB.prepare(
+      `UPDATE usage_services SET last_status=?, last_latency_ms=?, last_used_bytes=?,
+       last_note=?, last_checked_at=? WHERE service_id=?`)
+      .bind(p.status, p.latency_ms || 0, p.used_bytes || 0, p.note || "", checked_at, p.service_id)));
+  }
+
+  const byId = new Map(probes.map(p => [p.service_id, p]));
+  const merged = services.map(s => byId.get(s.service_id)
+    || { ...s, status: "paused", latency_ms: 0, used_bytes: 0, note: "Paused" });
+
+  return {
+    checked_at,
+    schema_ready,
+    builtin,
+    services: merged,
+    alerts: merged.filter(s => s.status === "warn" || s.status === "down").length
+  };
+};
+
+A.master_save_usage_service = async (env, body, ctx) => {
+  await masterEmail(env, ctx.req, body);
+  const sv = body.service || {};
+  const name = String(sv.name || "").trim();
+  const endpoint = String(sv.endpoint || "").trim();
+  if (!name) bad("Give this service a name.", "VALIDATION");
+  if (!/^https:\/\//i.test(endpoint)) bad("The check URL must start with https://", "VALIDATION");
+
+  const fields = [
+    name,
+    ["supabase", "generic"].includes(sv.provider) ? sv.provider : "generic",
+    endpoint,
+    String(sv.secret_name || "").trim(),
+    Math.max(0, Number(sv.limit_bytes) || 0),
+    Math.min(100, Math.max(1, Number(sv.warn_pct) || 80)),
+    Math.max(0, Number(sv.warn_ms) || 1500),
+    sv.is_active === 0 ? 0 : 1,
+    Number(sv.sort) || 0
+  ];
+
+  if (sv.service_id) {
+    await env.DB.prepare(
+      `UPDATE usage_services SET name=?, provider=?, endpoint=?, secret_name=?, limit_bytes=?,
+       warn_pct=?, warn_ms=?, is_active=?, sort=?, updated_at=? WHERE service_id=?`)
+      .bind(...fields, nowIso(), sv.service_id).run();
+    return { service_id: sv.service_id };
+  }
+
+  const id = `SVC-${uuid()}`;
+  await env.DB.prepare(
+    `INSERT INTO usage_services (service_id, name, provider, endpoint, secret_name, limit_bytes,
+     warn_pct, warn_ms, is_active, sort, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(id, ...fields, nowIso(), nowIso()).run();
+  return { service_id: id };
+};
+
+A.master_delete_usage_service = async (env, body, ctx) => {
+  await masterEmail(env, ctx.req, body);
+  await env.DB.prepare("DELETE FROM usage_services WHERE service_id=?").bind(body.service_id).run();
   return { ok: true };
 };
 

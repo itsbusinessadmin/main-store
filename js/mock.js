@@ -68,6 +68,17 @@
       P("PRD-7", "Cedar Room Mist", 890, "CAT-1", 17, "#4a5a35", "#cfdcb4", "Cedarwood, vetiver and bergamot in a fine alcohol-free mist."),
       P("PRD-8", "Stoneware Mug", 760, "CAT-2", 22, "#6b4b3a", "#e0cbb8", "Speckled clay, 300ml, dishwasher-safe.")
     ];
+    const usageServices = [
+      { service_id: "SVC-1", name: "Supabase \u2014 main project", provider: "supabase",
+        endpoint: "https://demo.supabase.co/rest/v1/", secret_name: "SUPABASE_SERVICE_KEY",
+        limit_bytes: 500 * 1024 * 1024, warn_pct: 80, warn_ms: 1500, is_active: 1, sort: 0 },
+      { service_id: "SVC-2", name: "Resend \u2014 transactional email", provider: "generic",
+        endpoint: "https://api.resend.com/health", secret_name: "RESEND_API_KEY",
+        limit_bytes: 0, warn_pct: 80, warn_ms: 900, is_active: 1, sort: 1 },
+      { service_id: "SVC-3", name: "Uploadthing \u2014 media", provider: "generic",
+        endpoint: "https://api.uploadthing.com/v1/usage", secret_name: "",
+        limit_bytes: 2 * 1024 * 1024 * 1024, warn_pct: 80, warn_ms: 1500, is_active: 1, sort: 2 }
+    ];
     const payMethods = [
       { method_id: "PM-1", store_id: store.store_id, name: "GCash", account_name: "Verde & Co.", account_number: "0917 000 0000", qr_file_id: IMG("#173d24", "#5fbf85"), requires_proof: 1, valid_for: ["delivery", "pickup", "meetup"], is_active: 1 },
       { method_id: "PM-2", store_id: store.store_id, name: "Bank Transfer (BPI)", account_name: "Verde Trading", account_number: "1234-5678-90", qr_file_id: "", requires_proof: 1, valid_for: ["delivery"], is_active: 1 },
@@ -105,7 +116,8 @@
       { payment_id: "SP-0", store_id: "STR-DEMO-2K4X-9QW1", store_name: "Verde & Co.", plan_id: "PLAN-STARTER", plan_name: "Starter", amount: 299, kind: "SIGNUP", status: "APPROVED", receipt_file_id: "", reference: "GC-77120", created_at: addDays(now(), -3), reject_reason: "" }
     ];
     return { stores: [store, ...otherStores], settings: [settings], categories: cats, products,
-             payMethods, fulfillment, scheduling: [scheduling], orders, plans, masterPay, payments, seq: 100239 };
+             payMethods, fulfillment, scheduling: [scheduling], orders, plans, masterPay, payments,
+             usageServices, seq: 100239 };
   }
 
   let db = null;
@@ -403,7 +415,11 @@
         expired: db.stores.filter(s => s.status === "EXPIRED").length,
         pending_payments: db.payments.filter(p => p.status === "PENDING").length,
         revenue: db.payments.filter(p => p.status === "APPROVED").reduce((t, p) => t + p.amount, 0),
-        recent_stores: db.stores.slice(-5).reverse()
+        recent_stores: db.stores.slice(-5).reverse(),
+        /* Mirrors the Worker: the cached count from the last usage probe, so
+           the sidebar can flag a problem before the tab is opened. */
+        usage_alerts: (db.usageServices || [])
+          .filter(sv => sv.is_active && ["warn", "down"].includes(sv.last_status)).length
       };
     },
     master_list_stores: ({ q = "", status = "" } = {}, api) => {
@@ -485,6 +501,72 @@
       requireMaster(api);
       if (method.method_id) { const i = db.masterPay.findIndex(x => x.method_id === method.method_id); db.masterPay[i] = { ...db.masterPay[i], ...method }; }
       else db.masterPay.push({ ...method, method_id: "MPM-" + Date.now(), is_active: 1 });
+      save(); return { ok: true };
+    },
+
+    /* ---------- Usage ---------- */
+    master_usage: (_, api) => {
+      requireMaster(api);
+      /* No network in demo mode, so readings are synthesised. They are derived
+         from each service's id rather than random, so the tab is stable across
+         reloads and one service is always in trouble to show that path. */
+      const db_bytes = 18_400_000 + db.orders.length * 2048;
+      const kv_bytes = db.products.reduce((n, p) => n + (p.images?.length || 0) * 42_000, 0);
+      const fake = { "SVC-1": { latency_ms: 210, used_bytes: 437 * 1024 * 1024, ok: true },
+                     "SVC-2": { latency_ms: 1840, used_bytes: 0, ok: true },
+                     "SVC-3": { latency_ms: 0, used_bytes: 0, ok: false, note: "HTTP 503" } };
+
+      const services = (db.usageServices || []).map(sv => {
+        const r = fake[sv.service_id] || { latency_ms: 180, used_bytes: 0, ok: true };
+        let status = "ok", note = r.note || "";
+        if (!r.ok) { status = "down"; note = note || "No response"; }
+        else {
+          const reasons = [];
+          if (sv.warn_ms && r.latency_ms > sv.warn_ms) reasons.push(`Slow (${r.latency_ms} ms)`);
+          if (sv.limit_bytes > 0 && r.used_bytes > 0) {
+            const pct = Math.round((r.used_bytes / sv.limit_bytes) * 100);
+            if (pct >= (sv.warn_pct || 80)) reasons.push(`${pct}% of limit used`);
+          }
+          if (reasons.length) { status = "warn"; note = reasons.join(" \u00b7 "); }
+        }
+        /* Mirror the Worker: the probe result is written back to the row so the
+           dashboard can report an alert count without probing again. */
+        Object.assign(sv, { last_status: status, last_latency_ms: r.latency_ms,
+                            last_used_bytes: r.used_bytes, last_note: note, last_checked_at: now() });
+        return { ...sv, has_secret: !!sv.secret_name, status, note,
+                 latency_ms: r.latency_ms, used_bytes: r.used_bytes };
+      });
+      save();
+
+      return {
+        checked_at: now(),
+        builtin: {
+          d1: { ok: true, latency_ms: 34, size_bytes: db_bytes,
+                rows_total: db.stores.length + db.products.length + db.orders.length,
+                counts: { stores: db.stores.length, products: db.products.length,
+                          orders: db.orders.length, order_items: db.orders.reduce((n, o) => n + o.items.length, 0),
+                          subscription_payments: db.payments.length } },
+          kv: { ok: true, latency_ms: 22, files: db.products.length * 2,
+                files_sized: db.products.length * 2, size_bytes: kv_bytes, truncated: false }
+        },
+        services,
+        alerts: services.filter(s => s.status === "warn" || s.status === "down").length
+      };
+    },
+    master_save_usage_service: ({ service }, api) => {
+      requireMaster(api);
+      db.usageServices = db.usageServices || [];
+      if (service.service_id) {
+        const i = db.usageServices.findIndex(x => x.service_id === service.service_id);
+        db.usageServices[i] = { ...db.usageServices[i], ...service };
+      } else {
+        db.usageServices.push({ ...service, service_id: "SVC-" + Date.now(), is_active: 1 });
+      }
+      save(); return { ok: true };
+    },
+    master_delete_usage_service: ({ service_id }, api) => {
+      requireMaster(api);
+      db.usageServices = (db.usageServices || []).filter(x => x.service_id !== service_id);
       save(); return { ok: true };
     },
 

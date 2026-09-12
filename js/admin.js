@@ -464,6 +464,37 @@
       };
     }
 
+    /* Variant groups are edited as free text, so what comes out of the form is
+       not what should reach the storefront: a new group starts life with one
+       blank option, "Add option" appends more blanks, and a blank option that
+       gets saved renders on the customer page as a chip that can be clicked
+       but never counts as a choice — leaving "Add to cart" stuck on
+       "Choose Size". Normalise here, at the one point everything is saved:
+       trim, drop blanks and duplicates, keep price_delta index-aligned with
+       the options that survive, and drop any group left without a usable
+       name or option. */
+    function cleanVariantGroups(groups) {
+      const seenGroup = new Set();
+      return (groups || []).reduce((out, g) => {
+        const name = String(g.name ?? "").trim();
+        if (!name || seenGroup.has(name.toLowerCase())) return out;
+
+        const options = [], price_delta = [], seenOption = new Set();
+        (g.options || []).forEach((o, i) => {
+          const option = String(o ?? "").trim();
+          if (!option || seenOption.has(option.toLowerCase())) return;
+          seenOption.add(option.toLowerCase());
+          options.push(option);
+          price_delta.push(Number(g.price_delta?.[i]) || 0);
+        });
+        if (!options.length) return out;
+
+        seenGroup.add(name.toLowerCase());
+        out.push({ name, options, price_delta, required: g.required !== false });
+        return out;
+      }, []);
+    }
+
     function editProduct(p) {
       const F = {
         product_id: p?.product_id, name: p?.name || "", price: p?.price ?? "", stock: p?.stock ?? 0,
@@ -492,6 +523,8 @@
                 onchange: e => { g.required = e.target.checked; } }),
               el("span", {}, "Required \u2014 customer must pick an option before adding to cart"),
               el("span", { class: "xs muted" }, g.required === false ? " (optional add-on, like \u201cExtras\u201d)" : " (like \u201cSize\u201d)")),
+            g.options.filter(o => String(o).trim()).length === 1 && g.required !== false
+              ? el("div", { class: "hint mb" }, "Only one option, so it is picked for the customer automatically.") : null,
             ...g.options.map((o, oi) => el("div", { class: "row", style: "gap:8px;margin-bottom:8px" },
               el("input", { class: "input", value: o, placeholder: "Option", oninput: e => g.options[oi] = e.target.value }),
               el("input", { class: "input", type: "number", style: "max-width:120px", value: g.price_delta?.[oi] ?? 0,
@@ -499,7 +532,15 @@
                 oninput: e => { g.price_delta = g.price_delta || []; g.price_delta[oi] = Number(e.target.value) || 0; } }),
               el("button", { class: "btn ghost sm", onclick: () => { g.options.splice(oi, 1); g.price_delta?.splice(oi, 1); paintVariants(); } }, icon("x", { size: 15 })))),
             el("button", { class: "btn ghost sm", onclick: () => { g.options.push(""); (g.price_delta = g.price_delta || []).push(0); paintVariants(); } }, "Add option"))),
-          el("button", { class: "btn ghost sm", onclick: () => { F.variant_groups.push({ name: "", options: [""], price_delta: [0], required: true }); paintVariants(); } }, "Add variant group"));
+          el("button", { class: "btn ghost sm", onclick: () => {
+            /* The first group is the main choice (Size) and is required. Groups
+               added after it are extras, so they default to optional — picking
+               the size alone is then enough to add to cart. Either can be
+               changed with the checkbox above. */
+            F.variant_groups.push({ name: "", options: [""], price_delta: [0],
+              required: F.variant_groups.length === 0 });
+            paintVariants();
+          } }, "Add variant group"));
       };
       paintVariants();
 
@@ -521,7 +562,7 @@
           el("div", { class: "field" }, el("label", {}, "Description"),
             el("textarea", { class: "textarea", oninput: e => F.description = e.target.value }, F.description)),
           el("div", { class: "field" }, el("label", {}, "Variants"),
-            el("div", { class: "hint mb" }, "Optional. Customers must pick one option per group before adding to cart."),
+            el("div", { class: "hint mb" }, "Optional. The first group is the main choice customers make \u2014 add \u201cSize\u201d with a single option and it shows on your storefront straight away. Groups after it are optional extras unless you tick Required."),
             vBox)),
         footer: [
           p ? el("button", { class: "btn danger", onclick: async () => {
@@ -537,7 +578,7 @@
         if (F.price === "" || Number(F.price) < 0) return toast("Enter a valid price.");
         save.disabled = true;
         try {
-          F.variant_groups = F.variant_groups.filter(g => g.name.trim() && g.options.filter(Boolean).length);
+          F.variant_groups = cleanVariantGroups(F.variant_groups);
           F.images = F.images.filter(Boolean);
           await api.storeSaveProduct({ product: F });
           toast("Product saved", "ok"); mm.close(); renderSection();

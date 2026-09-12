@@ -108,7 +108,10 @@
     masterPendingPayments: () => api.call("master_list_pending_payments"),
     masterReviewPayment: p => api.call("master_review_payment", p),
     masterSavePlan: p => api.call("master_save_plan", p),
-    masterSaveMasterPayment: p => api.call("master_save_master_payment_method", p)
+    masterSaveMasterPayment: p => api.call("master_save_master_payment_method", p),
+    masterUsage: () => api.call("master_usage"),
+    masterSaveUsageService: p => api.call("master_save_usage_service", p),
+    masterDeleteUsageService: id => api.call("master_delete_usage_service", { service_id: id })
   };
 
   w.api = api;
