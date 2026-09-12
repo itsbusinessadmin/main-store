@@ -125,13 +125,17 @@ A.public_get_store = async (env, body) => {
   await refreshLifecycle(env, s);
   if (!s.customer_store_enabled) bad("This store isn't open right now.", "STORE_CLOSED", 403);
 
-  const [set, cats, pms, ff, sch] = await Promise.all([
-    env.DB.prepare("SELECT * FROM store_settings WHERE store_id=?").bind(s.store_id).first(),
-    env.DB.prepare("SELECT * FROM categories WHERE store_id=? ORDER BY sort").bind(s.store_id).all(),
-    env.DB.prepare("SELECT * FROM store_payment_methods WHERE store_id=? AND is_active=1").bind(s.store_id).all(),
-    env.DB.prepare("SELECT * FROM fulfillment_settings WHERE store_id=? AND enabled=1").bind(s.store_id).all(),
-    env.DB.prepare("SELECT * FROM scheduling_settings WHERE store_id=?").bind(s.store_id).first()
+  /* One batch rather than five awaited calls: Promise.all still issues five
+     separate requests to D1, and this is the storefront's critical path. */
+  const [setR, catsR, pmsR, ffR, schR] = await env.DB.batch([
+    env.DB.prepare("SELECT * FROM store_settings WHERE store_id=?").bind(s.store_id),
+    env.DB.prepare("SELECT * FROM categories WHERE store_id=? ORDER BY sort").bind(s.store_id),
+    env.DB.prepare("SELECT * FROM store_payment_methods WHERE store_id=? AND is_active=1").bind(s.store_id),
+    env.DB.prepare("SELECT * FROM fulfillment_settings WHERE store_id=? AND enabled=1").bind(s.store_id),
+    env.DB.prepare("SELECT * FROM scheduling_settings WHERE store_id=?").bind(s.store_id)
   ]);
+  const set = setR.results[0], sch = schR.results[0];
+  const cats = catsR, pms = pmsR, ff = ffR;
 
   return {
     public_store_id: s.public_store_id, business_name: s.business_name, status: s.status,
@@ -159,10 +163,11 @@ A.public_list_products = async (env, body) => {
   if (body.category_id) { where.push("category_id = ?"); args.push(body.category_id); }
   if (body.q) { where.push("(name LIKE ? OR description LIKE ?)"); args.push(`%${body.q}%`, `%${body.q}%`); }
   const w = where.join(" AND ");
-  const [rows, count] = await Promise.all([
-    env.DB.prepare(`SELECT * FROM products WHERE ${w} ORDER BY sort, rowid LIMIT ? OFFSET ?`).bind(...args, limit, offset).all(),
-    env.DB.prepare(`SELECT COUNT(*) AS n FROM products WHERE ${w}`).bind(...args).first()
+  const [rows, countR] = await env.DB.batch([
+    env.DB.prepare(`SELECT * FROM products WHERE ${w} ORDER BY sort, rowid LIMIT ? OFFSET ?`).bind(...args, limit, offset),
+    env.DB.prepare(`SELECT COUNT(*) AS n FROM products WHERE ${w}`).bind(...args)
   ]);
+  const count = countR.results[0];
   return { items: rows.results.map(shapeProduct), total: count.n, has_more: offset + rows.results.length < count.n };
 };
 
@@ -310,8 +315,9 @@ A.store_signup = async (env, body) => {
 A.store_dashboard = async (env, body, ctx) => {
   const s = requireAccess(await currentStore(env, ctx.req, body), ["FULL_ADMIN", "ORDERS_AND_SUBSCRIPTION", "INITIAL_SETUP", "SUBSCRIPTION_ONLY"]);
   const today = nowIso().slice(0, 10), month = nowIso().slice(0, 7);
-  const q = (sql, ...a) => env.DB.prepare(sql).bind(s.store_id, ...a).first();
-  const [ordersToday, pending, unseen, products, revToday, revMonth, revAll, recent] = await Promise.all([
+  /* Eight counters in one batched round trip instead of eight separate calls. */
+  const q = (sql, ...a) => env.DB.prepare(sql).bind(s.store_id, ...a);
+  const r = await env.DB.batch([
     q("SELECT COUNT(*) n FROM orders WHERE store_id=? AND substr(created_at,1,10)=?", today),
     q("SELECT COUNT(*) n FROM orders WHERE store_id=? AND status='PENDING'"),
     q("SELECT COUNT(*) n FROM orders WHERE store_id=? AND seen=0"),
@@ -319,8 +325,10 @@ A.store_dashboard = async (env, body, ctx) => {
     q("SELECT COALESCE(SUM(total),0) n FROM orders WHERE store_id=? AND status IN ('PAID','COMPLETED') AND substr(created_at,1,10)=?", today),
     q("SELECT COALESCE(SUM(total),0) n FROM orders WHERE store_id=? AND status IN ('PAID','COMPLETED') AND substr(created_at,1,7)=?", month),
     q("SELECT COALESCE(SUM(total),0) n FROM orders WHERE store_id=? AND status IN ('PAID','COMPLETED')"),
-    env.DB.prepare("SELECT * FROM orders WHERE store_id=? ORDER BY created_at DESC LIMIT 5").bind(s.store_id).all()
+    env.DB.prepare("SELECT * FROM orders WHERE store_id=? ORDER BY created_at DESC LIMIT 5").bind(s.store_id)
   ]);
+  const [ordersToday, pending, unseen, products, revToday, revMonth, revAll] = r.map(x => x.results[0]);
+  const recent = r[7];
   return {
     store: s, orders_today: ordersToday.n, pending: pending.n, unseen: unseen.n, products: products.n,
     revenue_today: revToday.n, revenue_month: revMonth.n, revenue_all: revAll.n, recent: recent.results,
@@ -517,14 +525,19 @@ A.store_complete_setup = async (env, body, ctx) => {
 
 A.store_get_subscription = async (env, body, ctx) => {
   const s = await currentStore(env, ctx.req, body);
-  const [plan, plans, mpm, history] = await Promise.all([
-    s.plan_id ? env.DB.prepare("SELECT * FROM subscription_plans WHERE plan_id=?").bind(s.plan_id).first() : null,
-    env.DB.prepare("SELECT * FROM subscription_plans WHERE is_active=1 ORDER BY price").all(),
-    env.DB.prepare("SELECT * FROM master_payment_methods WHERE is_active=1").all(),
+  const stmts = [
+    env.DB.prepare("SELECT * FROM subscription_plans WHERE is_active=1 ORDER BY price"),
+    env.DB.prepare("SELECT * FROM master_payment_methods WHERE is_active=1"),
     env.DB.prepare(`SELECT sp.*, pl.name AS plan_name FROM subscription_payments sp
       LEFT JOIN subscription_plans pl ON pl.plan_id = sp.plan_id
-      WHERE sp.store_id=? ORDER BY sp.created_at DESC`).bind(s.store_id).all()
-  ]);
+      WHERE sp.store_id=? ORDER BY sp.created_at DESC`).bind(s.store_id)
+  ];
+  /* The current plan is only looked up when the store has one, so it is
+     appended rather than always occupying a slot. */
+  if (s.plan_id) stmts.push(env.DB.prepare("SELECT * FROM subscription_plans WHERE plan_id=?").bind(s.plan_id));
+  const r = await env.DB.batch(stmts);
+  const [plans, mpm, history] = r;
+  const plan = s.plan_id ? r[3].results[0] : null;
   return { store: s, plan, plans: plans.results, master_payment_methods: mpm.results, history: history.results,
            days_left: s.subscription_expiry ? Math.ceil((new Date(s.subscription_expiry) - Date.now()) / 86400000) : null };
 };

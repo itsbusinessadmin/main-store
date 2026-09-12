@@ -236,11 +236,7 @@ code{font-family:var(--mono); font-size:.92em}
    room for the words alone, and dropping the icon leaves a cleaner button. */
 @media (min-width:760px){ .btn.add-cart .i{display:none} }
 
-/* A trash or x inside a destructive button should read as destructive too. */
-.btn.ghost.danger-text{color:var(--danger); border-color:transparent}
-.btn.ghost.danger-text:hover{background:color-mix(in srgb, var(--danger) 10%, transparent)}
 
-.btn-group.end{justify-content:flex-end}
 
 /* ---------- Chips (segmented-control look) ---------- */
 .chips{display:flex; gap:8px; overflow-x:auto; padding:4px 0 8px; scrollbar-width:none; scroll-snap-type:x proximity}
@@ -300,7 +296,6 @@ code{font-family:var(--mono); font-size:.92em}
   background-position:calc(100% - 20px) calc(50% + 2px),calc(100% - 15px) calc(50% + 2px);
   background-size:5px 5px,5px 5px; background-repeat:no-repeat; padding-right:44px;
 }
-.field.invalid .input,.field.invalid .select,.field.invalid .textarea{border-color:var(--danger)}
 .grid-2{display:grid; grid-template-columns:1fr; gap:0 16px}
 @media (min-width:640px){ .grid-2{grid-template-columns:1fr 1fr} }
 
@@ -331,7 +326,7 @@ code{font-family:var(--mono); font-size:.92em}
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
   min-height:124px;
 }
-.uploader:hover,.uploader.drag{border-color:var(--brand); color:var(--brand); background:var(--brand-050)}
+.uploader:hover{border-color:var(--brand); color:var(--brand); background:var(--brand-050)}
 .uploader img{margin:0 auto; max-height:170px; border-radius:var(--r-xs); object-fit:contain}
 .uploader .up-ico{font-size:26px; opacity:.65; line-height:1}
 .uploader .up-ico .i{width:26px; height:26px}
@@ -450,6 +445,10 @@ code{font-family:var(--mono); font-size:.92em}
 
 /* ---------- Stats ---------- */
 .stats{display:grid; gap:12px; grid-template-columns:repeat(2,1fr)}
+/* A stat card can't shrink below its number, so two columns overflow the
+   narrowest phones (320px). One column there rather than a sideways scroll. */
+@media (max-width:359px){ .stats{grid-template-columns:1fr} }
+.stat{min-width:0}
 @media (min-width:760px){ .stats{grid-template-columns:repeat(4,1fr)} }
 .stats + .stats{margin-top:12px}
 .stat{background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:18px; box-shadow:var(--shadow-sm)}
@@ -582,6 +581,28 @@ tbody tr:hover{background:var(--card-2)}
   transition:background var(--fast) var(--ease), color var(--fast) var(--ease);
 }
 .nav-link:hover{color:var(--text)}
+
+/* ---------- Touch hit areas ----------
+   Chips and nav links are sized for a mouse at 38px and 36px. A finger needs
+   about 44px, and on the storefront a chip IS the main control -- it picks the
+   category and the size. Widened only where the pointer is actually coarse, so
+   desktop density is untouched. */
+@media (pointer:coarse){
+  .chip{min-height:44px}
+  .nav-link{min-height:44px; display:inline-flex; align-items:center}
+  .gal-dots i{height:10px; margin-block:-2px}
+  /* Inline text buttons (the cart line's "Remove") are only ~25px tall. Grow
+     the button's own box with padding and pull it back with an equal negative
+     margin: the tap target becomes ~45px while the surrounding layout is
+     measurably unchanged. */
+  .btn.link{padding:10px 12px; margin:-10px -12px}
+  /* .btn.sm is 36px, which is right for a dense desktop list but short of a
+     finger. Only touch devices pay the extra height. */
+  .btn.sm{min-height:44px}
+  /* Native checkboxes render ~13px. The surrounding label is tappable, but the
+     box itself should be hittable too. */
+  input[type="checkbox"],input[type="radio"]{width:22px; height:22px; flex:0 0 auto}
+}
 .nav-link.on{background:var(--card); color:var(--text); box-shadow:var(--shadow-xs)}
 
 .announce{
@@ -817,8 +838,6 @@ html{scroll-padding-top:76px}
 .wizard-step.done{background:var(--ok-bg); border-color:transparent; color:var(--ok)}
 .wizard-step[data-clickable="1"]{cursor:pointer}
 .wizard-step[data-clickable="1"]:hover{border-color:var(--brand); color:var(--brand); background:var(--brand-050)}
-.req-tag{font-size:var(--fs-xs); font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted)}
-.req-tag.need{color:var(--danger)}
 
 /* ---------- Locked state ---------- */
 .locked{

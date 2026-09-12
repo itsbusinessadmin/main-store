@@ -3,7 +3,9 @@
    api.call("store_save_product", {...}) -> POST { action, ...payload }
 
    If US_CONFIG.DEMO_MODE is true, calls are routed to the in-browser mock
-   backend in mock.js so the UI is fully explorable with no server. */
+   backend in mock.js so the UI is fully explorable with no server. mock.js is
+   fetched on first use rather than linked from the pages: it is the largest
+   script in the project and a live store never executes a line of it. */
 (function (w) {
   const C = w.US_CONFIG;
 
@@ -17,6 +19,20 @@
     "public_validate_cart"
   ]);
 
+  /* Resolves once mock.js has loaded. Cached, so concurrent calls at boot
+     share one request instead of racing to insert several script tags. */
+  let mockReady = null;
+  function loadMock() {
+    return mockReady ||= new Promise((resolve, reject) => {
+      if (w.MockBackend) return resolve();
+      const tag = document.createElement("script");
+      tag.src = "js/mock.js";
+      tag.onload = () => resolve();
+      tag.onerror = () => { mockReady = null; reject(new ApiError("Couldn't load the demo data.", "NETWORK", 0)); };
+      document.head.append(tag);
+    });
+  }
+
   const api = {
     ApiError,
 
@@ -25,7 +41,7 @@
     masterToken: null,  // Google ID token      (platform owner)
 
     async call(action, payload = {}, { signal, retries = 1 } = {}) {
-      if (C.DEMO_MODE) return w.MockBackend.handle(action, payload, this);
+      if (C.DEMO_MODE) { await loadMock(); return w.MockBackend.handle(action, payload, this); }
 
       const body = JSON.stringify({ action, ...payload });
       const headers = { "Content-Type": "application/json" };
