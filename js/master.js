@@ -8,7 +8,7 @@
      - subscription extension accepts any number of days, not just presets
 */
 (function () {
-  const { $, $$, el, mount, img, imgFallback, imagePicker, dl, dlRow, money, dateFmt,
+  const { $, $$, el, mount, icon, img, imgFallback, imagePicker, dl, dlRow, money, dateFmt,
           dateTimeFmt, store, theme, toast, modal, confirmDialog, debounce,
           copy, skeletons, empty } = UI;
   const C = window.US_CONFIG;
@@ -127,7 +127,7 @@
       }, el("span", { class: "ico" }, n.ico), n.label)),
       el("div", { style: "margin-top:auto" }),
       el("button", { class: "nav-item", onclick: () => theme.toggle() },
-        el("span", { class: "ico", "data-theme-toggle": "" }, "\u{1F319}"), "Theme"),
+        el("span", { class: "ico", "data-theme-toggle": "" }, icon("moon")), "Theme"),
       el("button", { class: "nav-item", onclick: signOut }, el("span", { class: "ico" }, "\u21A9\uFE0E"), "Sign out"));
 
     mount($("#tabbar"), ...NAV.map(n => el("button", {
@@ -223,7 +223,7 @@
 
     mount(m,
       header("Stores", "Every store on the platform"),
-      el("div", { class: "searchbar mb" }, el("span", { class: "ico" }, "\u{1F50D}"),
+      el("div", { class: "searchbar mb" }, el("span", { class: "ico" }, icon("search")),
         el("input", { class: "input", placeholder: "Search name, ID or email\u2026",
           oninput: debounce(e => { q = e.target.value.trim(); load(); }, 300) })),
       chips, list);
@@ -443,7 +443,7 @@
           el("div", { class: "li-title" }, p.name),
           el("div", { class: "li-sub" }, `${p.duration_days} days${p.blurb ? " \u00b7 " + p.blurb : ""}`)),
         el("div", { class: "bold" }, money(p.price)),
-        el("button", { class: "btn ghost sm", onclick: () => editPlan(p) }, "Edit")))
+        el("button", { class: "btn ghost sm", onclick: () => editPlan(p) }, icon("pencil"), "Edit")))
         : [empty("\u{1F39F}\uFE0F", "No plans yet", "Add one so merchants have something to buy.")])));
 
     function editPlan(p) {
@@ -494,7 +494,7 @@
         el("div", { class: "grow" },
           el("div", { class: "li-title" }, p.name),
           el("div", { class: "li-sub" }, [p.account_name, p.account_number].filter(Boolean).join(" \u00b7 ") || "No account details")),
-        el("button", { class: "btn ghost sm", onclick: () => editM(p) }, "Edit")))
+        el("button", { class: "btn ghost sm", onclick: () => editM(p) }, icon("pencil"), "Edit")))
         : [empty("\u{1F4B3}", "No payment methods yet", "Add how merchants should pay you.")])));
 
     function editM(p) {

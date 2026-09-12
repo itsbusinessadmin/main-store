@@ -7,8 +7,14 @@
      - cart stores the file id, not a raw src, so thumbs survive a reload
 */
 (function () {
-  const { $, $$, el, mount, img, imgFallback, imagePicker, fileSrc, dl, dlRow, money, dateFmt,
+  const { $, $$, el, mount, icon, img, imgFallback, imagePicker, fileSrc, dl, dlRow, money, dateFmt,
           store, theme, toast, modal, debounce, uid, copy, skeletons, empty } = UI;
+
+  /* The view toggle shows the layout you'd switch TO, not the one you're in. */
+  const paintViewToggle = btn => {
+    mount(btn, icon(S.view === "grid" ? "list" : "grid"));
+    btn.setAttribute("aria-label", S.view === "grid" ? "Switch to list view" : "Switch to grid view");
+  };
   const C = window.US_CONFIG;
 
   const params = new URLSearchParams(location.search);
@@ -24,7 +30,7 @@
   /* ---------------- Boot ---------------- */
   async function boot() {
     theme.init();
-    $("#viewToggle").textContent = S.view === "grid" ? "\u2630" : "\u25A6";
+    paintViewToggle($("#viewToggle"));
     $("#products").dataset.view = S.view;
 
     if (!PUBLIC_ID) {
@@ -60,7 +66,7 @@
        would return null and throw. */
     $("#storeHeader")?.classList.add("hide");
     mount($("#app"), el("div", { class: "wrap mt-lg" },
-      el("div", { class: "card" }, empty("\u{1F6D2}", title, msg))));
+      el("div", { class: "card" }, empty(icon("cart"), title, msg))));
   }
 
   function paintHeader() {
@@ -166,8 +172,8 @@
       class: "gal-nav " + dir, type: "button", "aria-label": label,
       onclick: () => goTo(currentIndex() + (dir === "next" ? 1 : -1))
     }, glyph);
-    const prev = photos.length > 1 ? arrow("prev", "\u2039", "Previous photo") : null;
-    const next = photos.length > 1 ? arrow("next", "\u203A", "Next photo") : null;
+    const prev = photos.length > 1 ? arrow("prev", icon("chevron-up"), "Previous photo") : null;
+    const next = photos.length > 1 ? arrow("next", icon("chevron-down"), "Next photo") : null;
 
     const sync = () => {
       const i = currentIndex();
@@ -253,7 +259,7 @@
 
     if (!S.products.length) {
       mount(host);
-      mount($("#emptyState"), empty("\u{1F50D}", "Nothing here yet",
+      mount($("#emptyState"), empty(icon("search"), "Nothing here yet",
         S.q ? `No products match \u201c${S.q}\u201d.` : "This store hasn't added products to this category."));
       $("#loadMore").classList.add("hide");
       return;
@@ -324,7 +330,7 @@
 
     const priceEl = el("div", { class: "bold", style: "font-size:1.35rem;color:var(--brand)" }, money(p.price));
     const nEl = el("span", { class: "n" }, "1");
-    const addBtn = el("button", { class: "btn primary block lg" }, "Add to cart");
+    const addBtn = el("button", { class: "btn primary block lg" }, icon("cart-plus"), "Add to cart");
 
     // Before the customer has clicked anything, preview using only the primary
     // variant group (the first one, e.g. "Size") — not every required group.
@@ -344,7 +350,8 @@
       priceEl.textContent = money(livePrice() * qty);
       const missing = (p.variant_groups || []).find(g => g.required !== false && !chosen[g.name]);
       addBtn.disabled = !!missing;
-      addBtn.textContent = missing ? `Choose ${missing.name}` : "Add to cart";
+      mount(addBtn, missing ? null : icon("cart-plus"),
+        missing ? `Choose ${missing.name}` : "Add to cart");
     };
 
     const variantUI = (p.variant_groups || []).map(g => el("div", { class: "field" },
@@ -366,12 +373,12 @@
       }, o)))));
 
     const stepper = el("div", { class: "stepper" },
-      el("button", { "aria-label": "Decrease", onclick: () => { qty = Math.max(1, qty - 1); nEl.textContent = qty; refresh(); } }, "\u2212"),
+      el("button", { "aria-label": "Decrease", onclick: () => { qty = Math.max(1, qty - 1); nEl.textContent = qty; refresh(); } }, icon("minus-circle")),
       nEl,
       el("button", { "aria-label": "Increase", onclick: () => {
         if (qty >= p.stock) return toast(`Only ${p.stock} in stock.`);
         qty++; nEl.textContent = qty; refresh();
-      } }, "+"));
+      } }, icon("plus-circle")));
 
     const m = modal({
       title: p.name,
@@ -434,7 +441,7 @@
               S.cart = S.cart.filter(x => x.key !== l.key);
               persistCart();
               if (S.cart.length) paint(); else { m.close(); toast("Cart cleared"); }
-            } }, "Remove")),
+            } }, icon("trash", { size: 14 }), "Remove")),
           el("div", { class: "bold" }, money(l.price * l.qty)))),
         el("div", { class: "totals" },
           el("div", { class: "t-row" }, el("span", {}, "Subtotal"), el("span", {}, money(cartSubtotal()))),
@@ -720,7 +727,11 @@
         (S.store.contact || []).length
           ? el("div", { class: "card flat" },
               el("h4", { class: "sec-h" }, "Contact"),
-              dl(...S.store.contact.map(c => dlRow(c.type, c.value))))
+              dl(...S.store.contact.map(c => dlRow(
+                /phone|mobile|tel|viber|whatsapp|call/i.test(c.type || "")
+                  ? el("span", { class: "row", style: "gap:6px" }, icon("phone", { size: 15 }), c.type)
+                  : c.type,
+                c.value))))
           : null,
         el("button", { class: "btn ghost block", onclick: () => copy(location.href) }, "Copy storefront link"))
     });
@@ -737,7 +748,7 @@
       S.view = S.view === "grid" ? "list" : "grid";
       store.set("view", S.view);
       $("#products").dataset.view = S.view;
-      e.currentTarget.textContent = S.view === "grid" ? "\u2630" : "\u25A6";
+      paintViewToggle(e.currentTarget);
     };
     $("#loadMore").onclick = () => loadProducts(false);
     $("#heroCta").onclick = () => $("#shopSection").scrollIntoView({ behavior: "smooth", block: "start" });

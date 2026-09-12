@@ -217,6 +217,24 @@ code{font-family:var(--mono); font-size:.92em}
 .btn.block{width:100%}
 .btn.icon{width:var(--tap); min-height:var(--tap); padding:0; border-radius:50%}
 .btn-group{display:flex; gap:8px; flex-wrap:wrap}
+/* ---------- Icons ----------
+   Every SVG that UI.icon() builds carries .i (static markup in the HTML files
+   inlines the same thing by hand). Sized in em so an icon tracks the text it
+   sits beside, and stroked in currentColor so it inherits button, hover and
+   danger colors instead of needing a variant per context. */
+.i{
+  width:1.25em; height:1.25em; flex:0 0 auto; display:block;
+  fill:none; stroke:currentColor; stroke-width:2;
+  stroke-linecap:round; stroke-linejoin:round;
+}
+.btn .i{width:1.15em; height:1.15em}
+.btn.sm .i{width:1.05em; height:1.05em}
+.btn.icon .i{width:20px; height:20px}
+.btn.lg .i{width:1.2em; height:1.2em}
+/* A trash or x inside a destructive button should read as destructive too. */
+.btn.ghost.danger-text{color:var(--danger); border-color:transparent}
+.btn.ghost.danger-text:hover{background:color-mix(in srgb, var(--danger) 10%, transparent)}
+
 .btn-group.end{justify-content:flex-end}
 
 /* ---------- Chips (segmented-control look) ---------- */
@@ -311,6 +329,7 @@ code{font-family:var(--mono); font-size:.92em}
 .uploader:hover,.uploader.drag{border-color:var(--brand); color:var(--brand); background:var(--brand-050)}
 .uploader img{margin:0 auto; max-height:170px; border-radius:var(--r-xs); object-fit:contain}
 .uploader .up-ico{font-size:26px; opacity:.65; line-height:1}
+.uploader .up-ico .i{width:26px; height:26px}
 
 .ph{display:grid; place-items:center; background:var(--card-2); color:var(--muted-2);
   font-size:20px; border:1px solid var(--line)}
@@ -332,6 +351,7 @@ code{font-family:var(--mono); font-size:.92em}
   background:rgba(10,14,11,.62); color:#fff; display:grid; place-items:center; font-size:11px; line-height:1;
   transition:background var(--fast) var(--ease), transform var(--fast) var(--ease-spring);
 }
+.img-tile .rm .i{width:13px; height:13px}
 .img-tile .rm:hover{background:var(--danger)}
 .img-tile .rm:active{transform:scale(.88)}
 .img-tile.add{
@@ -383,6 +403,7 @@ code{font-family:var(--mono); font-size:.92em}
 .nav-item:hover{background:var(--card-2); color:var(--text)}
 .nav-item[aria-current="page"]{background:var(--brand-050); color:var(--brand)}
 .nav-item .ico{width:20px;text-align:center;flex:0 0 auto}
+.nav-item .ico .i{width:20px; height:20px}
 .nav-item[disabled]{opacity:.4; pointer-events:none}
 
 .main{padding:var(--pad) var(--pad) calc(var(--nav-h) + 32px); min-width:0; grid-column:1; grid-row:2}
@@ -407,6 +428,7 @@ code{font-family:var(--mono); font-size:.92em}
 }
 .tabbar button:active{transform:scale(.94)}
 .tabbar button .ico{font-size:19px; line-height:1}
+.tabbar button .ico .i{width:21px; height:21px; margin:0 auto}
 .tabbar button[aria-current="page"]{color:var(--brand)}
 .tabbar button[aria-current="page"]::before{
   content:""; position:absolute; top:0; left:28%; right:28%; height:3px;
@@ -505,6 +527,7 @@ tbody tr:hover{background:var(--card-2)}
 /* ---------- Empty / skeleton ---------- */
 .empty{text-align:center; padding:48px 20px; color:var(--muted)}
 .empty .ico{font-size:38px; margin-bottom:10px; opacity:.5}
+.empty .ico .i{width:40px; height:40px; margin:0 auto; stroke-width:1.7}
 .empty h3{color:var(--text); margin-bottom:6px}
 .skel{
   background:linear-gradient(90deg,var(--card-2) 25%,var(--card-3) 37%,var(--card-2) 63%);
@@ -574,7 +597,9 @@ tbody tr:hover{background:var(--card-2)}
 
 .searchbar{position:relative}
 .searchbar .input{padding-left:42px; border-radius:var(--r-pill); background:var(--card-2)}
-.searchbar .ico{position:absolute; left:15px; top:50%; transform:translateY(-50%); color:var(--muted)}
+.searchbar .ico{position:absolute; left:15px; top:50%; transform:translateY(-50%); color:var(--muted);
+  display:grid; place-items:center; pointer-events:none}
+.searchbar .ico .i{width:18px; height:18px}
 
 /* Anchor targets (#home, #shopSection) shouldn't tuck under the sticky nav
    when jumped to via the nav links or the hero CTA. */
@@ -616,6 +641,7 @@ html{scroll-padding-top:76px}
 [data-color-mode="dark"] .fab{color:#0c130e}
 .fab:hover{transform:translateY(-2px)}
 .fab:active{transform:scale(.95)}
+.fab .i{width:22px; height:22px}
 .fab .count{background:rgba(255,255,255,.22); border-radius:var(--r-pill); padding:1px 9px; font-size:var(--fs-sm)}
 .fab[hidden]{display:none}
 
@@ -680,7 +706,7 @@ html{scroll-padding-top:76px}
 .gal-nav{
   position:absolute; top:50%; transform:translateY(-50%); z-index:2;
   width:38px; height:38px; border-radius:50%; display:grid; place-items:center;
-  font-size:22px; line-height:1; padding-bottom:3px;
+  font-size:22px; line-height:1;
   background:color-mix(in srgb, var(--card) 88%, transparent); color:var(--text);
   border:1px solid var(--line); box-shadow:var(--shadow-sm);
   backdrop-filter:blur(6px); opacity:0;
@@ -688,6 +714,9 @@ html{scroll-padding-top:76px}
 }
 .gal-nav.prev{left:10px}
 .gal-nav.next{right:10px}
+/* One chevron pair serves both arrows: the up chevron turned a quarter turn
+   points left, the down chevron the same turn points right. */
+.gal-nav .i{width:22px; height:22px; transform:rotate(-90deg)}
 .gal-view:hover .gal-nav,.gal-nav:focus-visible{opacity:1}
 .gal-nav:hover{background:var(--card); transform:translateY(-50%) scale(1.08)}
 .gal-nav:active{transform:translateY(-50%) scale(.94)}
@@ -706,6 +735,7 @@ html{scroll-padding-top:76px}
 
 .stepper{display:inline-flex; align-items:center; border:1px solid var(--line); border-radius:var(--r-pill); overflow:hidden}
 .stepper button{width:42px; height:42px; display:grid; place-items:center; font-size:19px; font-weight:600; transition:background var(--fast) var(--ease), transform var(--fast) var(--ease-spring)}
+.stepper button .i{width:21px; height:21px}
 .stepper button:hover{background:var(--card-2)}
 .stepper button:active{transform:scale(.9)}
 .stepper .n{min-width:44px; text-align:center; font-weight:700}
@@ -768,6 +798,7 @@ html{scroll-padding-top:76px}
   background:var(--card-2); color:var(--muted);
 }
 .locked .ico{font-size:32px; margin-bottom:10px}
+.locked .ico .i{width:34px; height:34px; margin:0 auto}
 
 /* ---------- Print ---------- */
 @media print{

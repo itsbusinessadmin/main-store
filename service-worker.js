@@ -2,9 +2,9 @@
    App shell: cache-first (instant loads, works offline).
    API reads:  network-first with a cached fallback.
    Anything non-GET is never cached. */
-const VERSION = "us-v5";
+const VERSION = "us-v6";
 const SHELL = [
-  "index.html", "css/app.css", "js/config.js", "js/ui.js", "js/api.js",
+  "index.html", "css/app.css", "js/config.js", "js/icons.js", "js/ui.js", "js/api.js",
   "js/customer.js", "js/mock.js", "manifest.json", "icons/icon.svg"
 ];
 
