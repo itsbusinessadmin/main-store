@@ -490,7 +490,11 @@
         if (!options.length) return out;
 
         seenGroup.add(name.toLowerCase());
-        out.push({ name, options, price_delta, required: g.required !== false });
+        /* Only the first surviving group can gate checkout — the storefront
+           enforces that regardless, so record it rather than storing a flag
+           that would be ignored. */
+        const required = out.length === 0 ? g.required !== false : false;
+        out.push({ name, options, price_delta, required });
         return out;
       }, []);
     }
@@ -518,12 +522,15 @@
               el("input", { class: "input", value: g.name, placeholder: "Group name (e.g. Size)",
                 oninput: e => g.name = e.target.value }),
               el("button", { class: "btn ghost sm", onclick: () => { F.variant_groups.splice(gi, 1); paintVariants(); } }, icon("trash", { size: 15 }), "Remove")),
-            el("label", { class: "row", style: "gap:6px;align-items:center;margin-bottom:10px;font-size:.85rem" },
-              el("input", { type: "checkbox", checked: g.required !== false,
-                onchange: e => { g.required = e.target.checked; } }),
-              el("span", {}, "Required \u2014 customer must pick an option before adding to cart"),
-              el("span", { class: "xs muted" }, g.required === false ? " (optional add-on, like \u201cExtras\u201d)" : " (like \u201cSize\u201d)")),
-            g.options.filter(o => String(o).trim()).length === 1 && g.required !== false
+            gi === 0
+              ? el("label", { class: "row", style: "gap:6px;align-items:center;margin-bottom:10px;font-size:.85rem" },
+                  el("input", { type: "checkbox", checked: g.required !== false,
+                    onchange: e => { g.required = e.target.checked; paintVariants(); } }),
+                  el("span", {}, "Required \u2014 customer must pick an option before adding to cart"),
+                  el("span", { class: "xs muted" }, g.required === false ? " (nothing is required)" : " (like \u201cSize\u201d)"))
+              : el("div", { class: "hint mb" },
+                  "Optional add-on. Once the customer picks from the first group they can add to cart, whether or not they choose here."),
+            gi === 0 && g.options.filter(o => String(o).trim()).length === 1 && g.required !== false
               ? el("div", { class: "hint mb" }, "Only one option, so it is picked for the customer automatically.") : null,
             ...g.options.map((o, oi) => el("div", { class: "row", style: "gap:8px;margin-bottom:8px" },
               el("input", { class: "input", value: o, placeholder: "Option", oninput: e => g.options[oi] = e.target.value }),
@@ -562,7 +569,7 @@
           el("div", { class: "field" }, el("label", {}, "Description"),
             el("textarea", { class: "textarea", oninput: e => F.description = e.target.value }, F.description)),
           el("div", { class: "field" }, el("label", {}, "Variants"),
-            el("div", { class: "hint mb" }, "Optional. The first group is the main choice customers make \u2014 add \u201cSize\u201d with a single option and it shows on your storefront straight away. Groups after it are optional extras unless you tick Required."),
+            el("div", { class: "hint mb" }, "Optional. The first group is the only one a customer must answer \u2014 add \u201cSize\u201d and it shows on your storefront straight away. Everything after it is an optional add-on, so picking a size is always enough to add to cart."),
             vBox)),
         footer: [
           p ? el("button", { class: "btn danger", onclick: async () => {
