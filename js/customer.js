@@ -316,8 +316,34 @@
   function openProduct(p) {
     if (p.stock <= 0) return toast("That item is sold out right now.");
     let qty = 1;
-    const chosen = {};
-    (p.variant_groups || []).forEach(g => chosen[g.name] = null);
+
+    /* Trust nothing about the shape of variant_groups here. Products saved
+       before the admin started normalising them can still carry blank or
+       duplicate options, and a blank option renders as a chip that can be
+       clicked but never counts as a choice. */
+    const groups = (p.variant_groups || [])
+      .map(g => ({ ...g, name: String(g.name ?? "").trim(),
+                   options: (g.options || []).map(o => String(o ?? "").trim()) }))
+      .map(g => {
+        const options = [], price_delta = [], seen = new Set();
+        g.options.forEach((o, i) => {
+          if (!o || seen.has(o.toLowerCase())) return;
+          seen.add(o.toLowerCase());
+          options.push(o); price_delta.push(Number(g.price_delta?.[i]) || 0);
+        });
+        return { ...g, options, price_delta };
+      })
+      .filter(g => g.name && g.options.length);
+
+    /* Selections are held by group position, not by name: two groups sharing a
+       name would otherwise overwrite each other's choice. The name-keyed object
+       the cart and the Worker's price check expect is built at add time.
+
+       A required group with exactly one option has nothing to decide, so it
+       starts already picked — otherwise a merchant who adds a single size
+       leaves "Add to cart" disabled behind one chip nobody thinks to press. */
+    const chosen = groups.map(g =>
+      g.required !== false && g.options.length === 1 ? g.options[0] : null);
 
     const photos = (p.images || []).filter(Boolean);
     const { dots, view } = photos.length
@@ -330,16 +356,16 @@
 
     const priceEl = el("div", { class: "bold", style: "font-size:1.35rem;color:var(--brand)" }, money(p.price));
     const nEl = el("span", { class: "n" }, "1");
-    const addBtn = el("button", { class: "btn primary block lg" }, icon("cart-plus"), "Add to cart");
+    const addBtn = el("button", { class: "btn primary block lg add-cart" }, icon("cart-plus"), "Add to cart");
 
     // Before the customer has clicked anything, preview using only the primary
     // variant group (the first one, e.g. "Size") — not every required group.
     // The moment they click any option, switch to strict mode: the price only
     // ever reflects what's actually been picked, nothing else.
     let touched = false;
-    const primaryGroup = (p.variant_groups || [])[0];
-    const livePrice = () => (p.variant_groups || []).reduce((price, g) => {
-      const i = g.options.indexOf(chosen[g.name]);
+    const primaryGroup = groups[0];
+    const livePrice = () => groups.reduce((price, g, gi) => {
+      const i = g.options.indexOf(chosen[gi]);
       if (i > -1) return price + (g.price_delta?.[i] || 0);
       if (touched || g !== primaryGroup || g.required === false) return price;
       const deltas = g.price_delta?.length ? g.price_delta : [0];
@@ -348,24 +374,27 @@
 
     const refresh = () => {
       priceEl.textContent = money(livePrice() * qty);
-      const missing = (p.variant_groups || []).find(g => g.required !== false && !chosen[g.name]);
+      const missing = groups.find((g, gi) => g.required !== false && !chosen[gi]);
       addBtn.disabled = !!missing;
       mount(addBtn, missing ? null : icon("cart-plus"),
         missing ? `Choose ${missing.name}` : "Add to cart");
     };
 
-    const variantUI = (p.variant_groups || []).map(g => el("div", { class: "field" },
-      el("label", {}, g.name + (g.required === false ? "" : " *")),
-      el("div", { class: "chips wrap-" }, ...g.options.map((o, i) => el("button", {
-        class: "chip", type: "button",
+    const variantUI = groups.map((g, gi) => el("div", { class: "field" },
+      el("label", {}, g.name + (g.required === false ? "" : " *"),
+        g.required === false ? el("span", { class: "xs muted" }, " \u00b7 optional") : null),
+      el("div", { class: "chips wrap-" }, ...g.options.map(o => el("button", {
+        class: "chip" + (chosen[gi] === o ? " on" : ""), type: "button",
         onclick: e => {
           touched = true;
           const alreadyOn = e.currentTarget.classList.contains("on");
           e.currentTarget.parentElement.querySelectorAll(".chip").forEach(c => c.classList.remove("on"));
-          if (alreadyOn) {
-            chosen[g.name] = null;
+          /* An only-option required group has nothing to fall back to, so
+             tapping it again must not clear it. */
+          if (alreadyOn && !(g.required !== false && g.options.length === 1)) {
+            chosen[gi] = null;
           } else {
-            chosen[g.name] = o;
+            chosen[gi] = o;
             e.currentTarget.classList.add("on");
           }
           refresh();
@@ -394,7 +423,9 @@
     refresh();
 
     addBtn.onclick = () => {
-      const variantLabel = Object.values(chosen).filter(Boolean).join(" / ");
+      const variant = {};
+      groups.forEach((g, gi) => { if (chosen[gi]) variant[g.name] = chosen[gi]; });
+      const variantLabel = chosen.filter(Boolean).join(" / ");
       const key = p.product_id + "|" + variantLabel;
       const line = S.cart.find(l => l.key === key);
       if (line) {
@@ -403,7 +434,7 @@
       } else {
         S.cart.push({
           key, product_id: p.product_id, name: p.name,
-          variant: { ...chosen }, variantLabel,
+          variant, variantLabel,
           price: livePrice(), qty,
           image: p.images?.[0] || ""      /* store the id, resolve at render time */
         });

@@ -231,6 +231,11 @@ code{font-family:var(--mono); font-size:.92em}
 .btn.sm .i{width:1.05em; height:1.05em}
 .btn.icon .i{width:20px; height:20px}
 .btn.lg .i{width:1.2em; height:1.2em}
+/* The add-to-cart icon earns its place on a phone, where the sheet is narrow
+   and the glyph reads faster than the label. From tablet width up there is
+   room for the words alone, and dropping the icon leaves a cleaner button. */
+@media (min-width:760px){ .btn.add-cart .i{display:none} }
+
 /* A trash or x inside a destructive button should read as destructive too. */
 .btn.ghost.danger-text{color:var(--danger); border-color:transparent}
 .btn.ghost.danger-text:hover{background:color-mix(in srgb, var(--danger) 10%, transparent)}
