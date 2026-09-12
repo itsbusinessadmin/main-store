@@ -272,17 +272,46 @@
     $("#loadMore").classList.toggle("hide", !S.hasMore);
   }
 
+  /* Only the FIRST variant group can gate checkout. Choosing the size is
+     enough; every group after it is an extra the customer may skip, whatever a
+     product saved earlier happens to have stored on it. Enforced here rather
+     than trusted from the record so existing products behave correctly without
+     being re-saved, and kept in one place so the card's price range, the chip
+     labels and the add-to-cart gate can never disagree. */
+  const isRequiredGroup = (g, index) => index === 0 && g.required !== false;
+
+  /* Trust nothing about the shape of variant_groups. Products saved before the
+     admin started normalising them can still carry blank or duplicate options,
+     and a blank renders as a chip that can be clicked but never counts as a
+     choice. Both the product card and the modal read groups through here so
+     they agree on which group is first. */
+  function usableGroups(p) {
+    return (p.variant_groups || [])
+      .map(g => ({ ...g, name: String(g.name ?? "").trim(),
+                   options: (g.options || []).map(o => String(o ?? "").trim()) }))
+      .map(g => {
+        const options = [], price_delta = [], seen = new Set();
+        g.options.forEach((o, i) => {
+          if (!o || seen.has(o.toLowerCase())) return;
+          seen.add(o.toLowerCase());
+          options.push(o); price_delta.push(Number(g.price_delta?.[i]) || 0);
+        });
+        return { ...g, options, price_delta };
+      })
+      .filter(g => g.name && g.options.length);
+  }
+
   // Cheapest and priciest possible combo across every variant group
   // (base price + cheapest option from each group, base price + priciest option from each group).
   function variantPriceRange(p) {
-    const groups = p.variant_groups || [];
+    const groups = usableGroups(p);
     if (!groups.length) return null;
     let min = p.price, max = p.price;
-    groups.forEach(g => {
+    groups.forEach((g, i) => {
       const deltas = g.price_delta?.length ? g.price_delta : [0];
-      // Optional groups (e.g. "Extras"): cheapest case is picking none of them (+0),
-      // priciest case is picking the most expensive option.
-      if (g.required === false) {
+      // Skippable groups (e.g. "Extras"): cheapest case is picking none of them
+      // (+0), priciest case is picking the most expensive option.
+      if (!isRequiredGroup(g, i)) {
         max += Math.max(0, ...deltas);
       } else {
         min += Math.min(...deltas);
@@ -317,23 +346,7 @@
     if (p.stock <= 0) return toast("That item is sold out right now.");
     let qty = 1;
 
-    /* Trust nothing about the shape of variant_groups here. Products saved
-       before the admin started normalising them can still carry blank or
-       duplicate options, and a blank option renders as a chip that can be
-       clicked but never counts as a choice. */
-    const groups = (p.variant_groups || [])
-      .map(g => ({ ...g, name: String(g.name ?? "").trim(),
-                   options: (g.options || []).map(o => String(o ?? "").trim()) }))
-      .map(g => {
-        const options = [], price_delta = [], seen = new Set();
-        g.options.forEach((o, i) => {
-          if (!o || seen.has(o.toLowerCase())) return;
-          seen.add(o.toLowerCase());
-          options.push(o); price_delta.push(Number(g.price_delta?.[i]) || 0);
-        });
-        return { ...g, options, price_delta };
-      })
-      .filter(g => g.name && g.options.length);
+    const groups = usableGroups(p);
 
     /* Selections are held by group position, not by name: two groups sharing a
        name would otherwise overwrite each other's choice. The name-keyed object
@@ -342,8 +355,8 @@
        A required group with exactly one option has nothing to decide, so it
        starts already picked — otherwise a merchant who adds a single size
        leaves "Add to cart" disabled behind one chip nobody thinks to press. */
-    const chosen = groups.map(g =>
-      g.required !== false && g.options.length === 1 ? g.options[0] : null);
+    const chosen = groups.map((g, gi) =>
+      isRequiredGroup(g, gi) && g.options.length === 1 ? g.options[0] : null);
 
     const photos = (p.images || []).filter(Boolean);
     const { dots, view } = photos.length
@@ -363,26 +376,25 @@
     // The moment they click any option, switch to strict mode: the price only
     // ever reflects what's actually been picked, nothing else.
     let touched = false;
-    const primaryGroup = groups[0];
     const livePrice = () => groups.reduce((price, g, gi) => {
       const i = g.options.indexOf(chosen[gi]);
       if (i > -1) return price + (g.price_delta?.[i] || 0);
-      if (touched || g !== primaryGroup || g.required === false) return price;
+      if (touched || !isRequiredGroup(g, gi)) return price;
       const deltas = g.price_delta?.length ? g.price_delta : [0];
       return price + Math.min(...deltas);
     }, p.price);
 
     const refresh = () => {
       priceEl.textContent = money(livePrice() * qty);
-      const missing = groups.find((g, gi) => g.required !== false && !chosen[gi]);
+      const missing = groups.find((g, gi) => isRequiredGroup(g, gi) && !chosen[gi]);
       addBtn.disabled = !!missing;
       mount(addBtn, missing ? null : icon("cart-plus"),
         missing ? `Choose ${missing.name}` : "Add to cart");
     };
 
     const variantUI = groups.map((g, gi) => el("div", { class: "field" },
-      el("label", {}, g.name + (g.required === false ? "" : " *"),
-        g.required === false ? el("span", { class: "xs muted" }, " \u00b7 optional") : null),
+      el("label", {}, g.name + (isRequiredGroup(g, gi) ? " *" : ""),
+        isRequiredGroup(g, gi) ? null : el("span", { class: "xs muted" }, " \u00b7 optional")),
       el("div", { class: "chips wrap-" }, ...g.options.map(o => el("button", {
         class: "chip" + (chosen[gi] === o ? " on" : ""), type: "button",
         onclick: e => {
@@ -391,7 +403,7 @@
           e.currentTarget.parentElement.querySelectorAll(".chip").forEach(c => c.classList.remove("on"));
           /* An only-option required group has nothing to fall back to, so
              tapping it again must not clear it. */
-          if (alreadyOn && !(g.required !== false && g.options.length === 1)) {
+          if (alreadyOn && !(isRequiredGroup(g, gi) && g.options.length === 1)) {
             chosen[gi] = null;
           } else {
             chosen[gi] = o;
