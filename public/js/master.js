@@ -122,13 +122,19 @@
   };
 
   /* ================= Nav ================= */
+  /* The current tab gets the solid version of its glyph, the way iOS marks
+     the selected tab. Falls back to the outline if a section's icon has no
+     filled counterpart. */
+  const navIcon = (name, current) =>
+    icon(current && window.US_ICONS?.[name + "-fill"] ? name + "-fill" : name);
+
   function renderNav() {
     mount($("#sidebar"),
       el("div", { class: "brandmark", style: "padding:6px 12px 16px" },
         el("span", {}, "Master Admin")),
       ...NAV.map(n => el("button", {
         class: "nav-item", "aria-current": S.section === n.id ? "page" : null, onclick: () => go(n.id)
-      }, el("span", { class: "ico" }, icon(n.ico)), n.label, alertDot(n.id))),
+      }, el("span", { class: "ico" }, navIcon(n.ico, S.section === n.id)), n.label, alertDot(n.id))),
       el("div", { style: "margin-top:auto" }),
       el("button", { class: "nav-item", onclick: () => theme.toggle() },
         el("span", { class: "ico", "data-theme-toggle": "" }, icon("moon")), "Theme"),
@@ -136,7 +142,7 @@
 
     mount($("#tabbar"), ...NAV.map(n => el("button", {
       "aria-current": S.section === n.id ? "page" : null, onclick: () => go(n.id)
-    }, el("span", { class: "ico" }, icon(n.ico)), n.label, alertDot(n.id))));
+    }, el("span", { class: "ico" }, navIcon(n.ico, S.section === n.id)), n.label, alertDot(n.id))));
     theme.init();
   }
 

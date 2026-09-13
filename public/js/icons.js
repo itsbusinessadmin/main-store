@@ -1,5 +1,6 @@
 /* Universal Store — icon set.
-   Thirty-three line icons on a 24×24 grid, 2px stroke, round caps and joins.
+   Thirty-three line icons on a 24×24 grid, 1.8px stroke, round caps and
+   joins, plus nine filled counterparts for the tab bar's selected state.
    Drawn as inline SVG rather than a sprite file so they need no extra
    request, work offline from the app-shell cache, and inherit colour from
    whatever they sit in — stroke is currentColor, so a red button gets a
@@ -80,6 +81,33 @@
       '<rect x="4.4" y="10.4" width="15.2" height="10" rx="2.4"/><path d="M8.2 10.4V7.6a3.8 3.8 0 0 1 7.6 0v2.8"/>',
     "sparkle":
       '<path d="M12 3.4 13.9 9 19.5 10.9 13.9 12.8 12 18.4 10.1 12.8 4.5 10.9 10.1 9Z"/><path d="M18.4 16.4l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7Z"/>',
+
+    /* ---- Filled variants ----
+       iOS marks the current tab by swapping the outline glyph for a solid
+       one, not by underlining it. These are silhouettes: UI.icon() gives any
+       "*-fill" name the .i.fill class, which fills with currentColor and
+       drops the stroke, so the shapes below carry no stroke of their own.
+       Holes (receipt lines, the gear's centre, the check) are cut with
+       fill-rule="evenodd" rather than painted in a background colour, so they
+       stay transparent over any surface. */
+    "chart-fill":
+      '<rect x="3.6" y="18.2" width="16.8" height="2.2" rx="1.1"/><rect x="5.5" y="13.2" width="2.9" height="4.2" rx="1.2"/><rect x="10.55" y="6.4" width="2.9" height="11" rx="1.2"/><rect x="15.6" y="9.8" width="2.9" height="7.6" rx="1.2"/>',
+    "receipt-fill":
+      '<path fill-rule="evenodd" d="M5.4 3.6h13.2v17.2l-2.64-1.6-2.64 1.6-2.64-1.6-2.64 1.6L5.4 20.8Zm3.6 4.1h6v1.8H9Zm0 4h6v1.8H9Z"/>',
+    "package-fill":
+      '<path d="M11.17 2.99a1.7 1.7 0 0 1 1.66 0l6.7 3.73c.14.08.26.17.36.28L12 11.15 4.11 7c.1-.11.22-.2.36-.28Zm-7.57 5.6L11.2 12.7v8.1l-6.73-3.74A1.7 1.7 0 0 1 3.6 15.8Zm16.8 0v7.21a1.7 1.7 0 0 1-.87 1.48l-6.7 3.73V12.7Z"/>',
+    "card-fill":
+      '<path fill-rule="evenodd" d="M5.4 5h13.2a2.6 2.6 0 0 1 2.6 2.6v.8H2.8v-.8A2.6 2.6 0 0 1 5.4 5ZM2.8 10.6h18.4v5.8A2.6 2.6 0 0 1 18.6 19H5.4a2.6 2.6 0 0 1-2.6-2.6Zm3.8 3.2h3.4v1.8H6.6Z"/>',
+    "truck-fill":
+      '<path d="M3.8 5.4h8.4a1 1 0 0 1 1 1v9.2H2.8V6.4a1 1 0 0 1 1-1Z"/><path d="M14.2 9.6a1 1 0 0 1 1-1h1.9a1 1 0 0 1 .71.3l2.9 2.9a1 1 0 0 1 .29.7v3.1h-6.8Z"/><circle cx="7" cy="18.1" r="2.1"/><circle cx="16.6" cy="18.1" r="2.1"/>',
+    "gear-fill":
+      '<path fill-rule="evenodd" d="M11.12 2.6h1.76a1 1 0 0 1 .98.8l.26 1.3c.56.16 1.1.38 1.6.66l1.1-.73a1 1 0 0 1 1.26.13l1.24 1.24a1 1 0 0 1 .13 1.26l-.73 1.1c.28.5.5 1.04.66 1.6l1.3.26a1 1 0 0 1 .8.98v1.76a1 1 0 0 1-.8.98l-1.3.26a7 7 0 0 1-.66 1.6l.73 1.1a1 1 0 0 1-.13 1.26l-1.24 1.24a1 1 0 0 1-1.26.13l-1.1-.73c-.5.28-1.04.5-1.6.66l-.26 1.3a1 1 0 0 1-.98.8h-1.76a1 1 0 0 1-.98-.8l-.26-1.3a7 7 0 0 1-1.6-.66l-1.1.73a1 1 0 0 1-1.26-.13L4.48 18.2a1 1 0 0 1-.13-1.26l.73-1.1a7 7 0 0 1-.66-1.6l-1.3-.26a1 1 0 0 1-.8-.98v-1.76a1 1 0 0 1 .8-.98l1.3-.26c.16-.56.38-1.1.66-1.6l-.73-1.1a1 1 0 0 1 .13-1.26L5.72 5.8a1 1 0 0 1 1.26-.13l1.1.73c.5-.28 1.04-.5 1.6-.66l.26-1.3a1 1 0 0 1 .98-.8ZM12 9.1a2.9 2.9 0 1 0 0 5.8 2.9 2.9 0 0 0 0-5.8Z"/>',
+    "ticket-fill":
+      '<path fill-rule="evenodd" d="M5.2 5.8h13.6a1.6 1.6 0 0 1 1.6 1.6v1.8a2.8 2.8 0 0 0 0 5.6v1.8a1.6 1.6 0 0 1-1.6 1.6H5.2a1.6 1.6 0 0 1-1.6-1.6v-1.8a2.8 2.8 0 0 0 0-5.6V7.4a1.6 1.6 0 0 1 1.6-1.6Zm7.7 1.5h1.4v9.4h-1.4Z"/>',
+    "store-fill":
+      '<path d="M5 4.4h14l2 5.2a2.6 2.6 0 0 1-4.5 2.2 2.6 2.6 0 0 1-4.5 0 2.6 2.6 0 0 1-4.5 0A2.6 2.6 0 0 1 3 9.6Z"/><path d="M4.4 12.75c.5.2 1.03.32 1.6.35V19a.4.4 0 0 0 .4.4h11.2a.4.4 0 0 0 .4-.4v-5.9a4 4 0 0 0 1.6-.35V19a2 2 0 0 1-2 2H6.4a2 2 0 0 1-2-2Z"/>',
+    "check-fill":
+      '<path fill-rule="evenodd" d="M12 2.9a9.1 9.1 0 1 0 0 18.2 9.1 9.1 0 0 0 0-18.2Zm4.39 6.02a1 1 0 0 1 .19 1.4l-5.2 6.8a1 1 0 0 1-1.5.1L6.8 14.13a1 1 0 0 1 1.4-1.43l1.87 1.83 4.92-6.43a1 1 0 0 1 1.4-.18Z"/>',
   };
 
   w.US_ICONS = P;

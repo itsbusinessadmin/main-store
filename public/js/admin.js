@@ -176,6 +176,12 @@
   const logout = () => { store.del("storeId"); api.storeId = null; location.reload(); };
 
   /* ================= Nav ================= */
+  /* The current tab gets the solid version of its glyph, the way iOS marks
+     the selected tab. Falls back to the outline if a section's icon has no
+     filled counterpart. */
+  const navIcon = (name, current) =>
+    icon(current && window.US_ICONS?.[name + "-fill"] ? name + "-fill" : name);
+
   function renderNav(allowed) {
     const side = $("#sidebar"), tabs = $("#tabbar");
     if (allowed.includes("wizard") || !allowed.length) { mount(side); mount(tabs); return; }
@@ -184,14 +190,14 @@
         el("span", { class: "truncate" }, S.store.business_name)),
       ...NAV.filter(n => allowed.includes(n.id)).map(n => el("button", {
         class: "nav-item", "aria-current": S.section === n.id ? "page" : null, onclick: () => go(n.id)
-      }, el("span", { class: "ico" }, icon(n.ico)), n.label)),
+      }, el("span", { class: "ico" }, navIcon(n.ico, S.section === n.id)), n.label)),
       el("div", { style: "margin-top:auto" }),
       el("button", { class: "nav-item", onclick: () => theme.toggle() },
         el("span", { class: "ico", "data-theme-toggle": "" }, icon("moon")), "Theme"),
       el("button", { class: "nav-item", onclick: logout }, el("span", { class: "ico" }, icon("undo")), "Sign out"));
     mount(tabs, ...NAV.filter(n => allowed.includes(n.id)).map(n => el("button", {
       "aria-current": S.section === n.id ? "page" : null, onclick: () => go(n.id)
-    }, el("span", { class: "ico" }, icon(n.ico)), n.label)));
+    }, el("span", { class: "ico" }, navIcon(n.ico, S.section === n.id)), n.label)));
     theme.init();
   }
 
