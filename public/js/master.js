@@ -262,7 +262,13 @@
   async function openStore(store_id) {
     const d = await api.masterStore(store_id);
     const s = d.store;
-    const shopUrl = `${location.origin}${location.pathname.replace(/master\.html$/, "index.html")}?store=${s.public_store_id}`;
+    /* The short link the seller actually hands out: their custom name if they
+       claimed one, otherwise their number. The long ?store= form is only a
+       fallback for a store that predates numbering. */
+    const ref = s.slug || s.store_no;
+    const shopUrl = ref
+      ? `${location.origin}/${ref}`
+      : `${location.origin}/index.html?store=${s.public_store_id}`;
     const refresh = () => { m.close(); renderSection(); };
 
     /* --- custom day extension --- */
@@ -285,12 +291,6 @@
     applyBtn.onclick = () => extend(daysInput.value);
     daysInput.addEventListener("keydown", e => { if (e.key === "Enter") extend(daysInput.value); });
 
-    const quickPicks = el("div", { class: "quick-picks" },
-      ...[7, 15, 30, 60, 90, 180, 365].map(dd => el("button", {
-        class: "chip", type: "button",
-        onclick: () => { daysInput.value = dd; daysInput.focus(); }
-      }, `+${dd}d`)));
-
     const currentExpiry = s.subscription_expiry
       ? `Currently expires ${dateFmt(s.subscription_expiry)}`
       : "No expiry set \u2014 days are counted from today";
@@ -310,7 +310,10 @@
             dlRow("Owner", s.owner_name),
             dlRow("Email", s.owner_email),
             dlRow("Admin ID", s.store_id, { mono: true }),
-            dlRow("Public ID", s.public_store_id, { mono: true }),
+            dlRow("Storefront", el("a", {
+              href: shopUrl, target: "_blank", rel: "noopener",
+              style: "text-decoration:underline"
+            }, shopUrl.replace(/^https?:\/\//, ""))),
             dlRow("Created", dateFmt(s.created_at)),
             dlRow("Expires", dateFmt(s.subscription_expiry)),
             dlRow("Products", d.products),
@@ -323,8 +326,7 @@
         el("div", { class: "card flat" },
           el("h4", { class: "sec-h" }, "Extend subscription"),
           el("p", { class: "hint mb" }, currentExpiry),
-          el("div", { class: "input-group" }, daysInput, applyBtn),
-          quickPicks),
+          el("div", { class: "input-group" }, daysInput, applyBtn)),
 
         el("div", { class: "card flat" },
           el("h4", { class: "sec-h" }, "Access"),

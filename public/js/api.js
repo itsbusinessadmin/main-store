@@ -89,7 +89,6 @@
     getProduct: (publicId, id) => api.read("public_get_product", { public_store_id: publicId, product_id: id }),
     validateCart: (publicId, items) => api.call("public_validate_cart", { public_store_id: publicId, items }),
     placeOrder: p => api.call("public_place_order", p),
-    trackOrder: (publicId, orderNo) => api.read("public_track_order", { public_store_id: publicId, order_number: orderNo }),
 
     /* ---- Merchant ---- */
     storeLogin: storeId => api.call("store_login", { store_id: storeId }),

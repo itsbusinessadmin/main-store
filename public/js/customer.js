@@ -65,7 +65,7 @@
     wireEvents();
     renderCategories();
     setTimeout(() => $("#splash").classList.add("gone"), 120);
-    renderCartFab();
+    renderCartCount();
   }
 
   /* The tidiest link this store has: its custom name, then its number, then
@@ -487,12 +487,15 @@
   const cartCount = () => S.cart.reduce((t, l) => t + l.qty, 0);
   const cartSubtotal = () => S.cart.reduce((t, l) => t + l.price * l.qty, 0);
 
-  function persistCart() { store.set(cartKey(), S.cart); renderCartFab(); }
+  function persistCart() { store.set(cartKey(), S.cart); renderCartCount(); }
 
-  function renderCartFab() {
+  /* The cart sits in the header, so the button itself is always there to be
+     found; only the count appears, once there is something to count. */
+  function renderCartCount() {
     const n = cartCount();
-    $("#cartFab").hidden = n === 0;
-    $("#cartCount").textContent = n;
+    const badge = $("#cartCount");
+    badge.hidden = n === 0;
+    badge.textContent = n;
   }
 
   function openCart() {
@@ -745,56 +748,12 @@
     setStep(1);
   }
 
-  /* ---------------- Track order ---------------- */
-  function openTrack() {
-    const input = el("input", { class: "input", placeholder: "e.g. VC-1001", autocomplete: "off" });
-    const out = el("div");
-    const go = el("button", { class: "btn primary" }, "Find order");
-
-    go.onclick = async () => {
-      if (!input.value.trim()) return toast("Enter your order number.");
-      go.disabled = true;
-      try {
-        const o = await api.trackOrder(PUBLIC_ID, input.value);
-        const tone = { PENDING: "warn", UNPAID: "warn", PAID: "info", COMPLETED: "ok", CANCELLED: "danger" }[o.status] || "";
-        mount(out, el("div", { class: "card flat" },
-          el("div", { class: "row between" },
-            el("strong", {}, o.order_number),
-            el("span", { class: "badge " + tone }, o.status)),
-          el("div", { class: "small muted mt" }, "Placed " + dateFmt(o.created_at)),
-          el("div", { class: "totals mt" },
-            ...(o.items || []).map(i => el("div", { class: "t-row" },
-              el("span", {}, `${i.qty} \u00d7 ${i.name}`), el("span", {}, money(i.price * i.qty)))),
-            el("div", { class: "t-row grand" }, el("span", {}, "Total"), el("span", {}, money(o.total))))));
-      } catch (e) {
-        mount(out, el("p", { class: "small", style: "color:var(--danger)" }, e.message));
-      } finally { go.disabled = false; }
-    };
-
-    modal({
-      title: "Check my order",
-      body: el("div", {}, el("div", { class: "field" }, el("label", {}, "Order number"), input), out),
-      footer: go
-    });
-  }
-
   /* ---------------- Store info ---------------- */
   function openInfo() {
-    const ff = S.store.fulfillment || [];
     modal({
       title: S.store.business_name,
       body: el("div", {},
         S.store.tagline ? el("p", { class: "muted" }, S.store.tagline) : null,
-        el("h4", { class: "sec-h" }, "How you can get your order"),
-        ...ff.map(f => el("div", { class: "card flat" },
-          el("div", { class: "bold" }, FF_LABEL[f.type]),
-          f.type === "delivery"
-            ? el("div", { class: "small muted" },
-                f.fee_mode === "manual" ? "Fee confirmed by the seller after ordering" : "Fee: " + money(f.fee))
-            : null,
-          f.address ? el("div", { class: "small mt" }, f.address) : null,
-          f.locations?.length ? el("div", { class: "small mt" }, f.locations.join(" \u00b7 ")) : null,
-          f.instructions ? el("div", { class: "xs muted mt" }, f.instructions) : null)),
         (S.store.contact || []).length
           ? el("div", { class: "card flat" },
               el("h4", { class: "sec-h" }, "Contact"),
@@ -811,8 +770,7 @@
   /* ---------------- Events ---------------- */
   function wireEvents() {
     $("#search").addEventListener("input", debounce(e => { S.q = e.target.value.trim(); loadProducts(true); }, 300));
-    $("#cartFab").onclick = openCart;
-    $("#trackBtn").onclick = openTrack;
+    $("#cartBtn").onclick = openCart;
     $("#infoBtn").onclick = openInfo;
     $("#themeBtn").onclick = () => theme.toggle();
     $("#viewToggle").onclick = e => {
