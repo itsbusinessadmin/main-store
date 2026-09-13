@@ -7,7 +7,7 @@
      - cart stores the file id, not a raw src, so thumbs survive a reload
 */
 (function () {
-  const { $, $$, el, mount, icon, img, imgFallback, imagePicker, fileSrc, dl, dlRow, money, dateFmt,
+  const { $, $$, el, mount, icon, img, imgFallback, payMark, imagePicker, fileSrc, dl, dlRow, money, dateFmt,
           store, theme, toast, modal, debounce, uid, copy, skeletons, empty } = UI;
 
   /* The view toggle shows the layout you'd switch TO, not the one you're in. */
@@ -653,7 +653,7 @@
           class: "list-item" + (F.payment === p.method_id ? " selected" : ""), type: "button",
           onclick: () => { F.payment = p.method_id; render(); }
         },
-          img(p.qr_file_id, { alt: "", cls: "thumb", fallback: imgFallback(icon("card")) }) || imgFallback(icon("card")),
+          payMark(p.name, { qrFileId: p.qr_file_id }),
           el("div", { class: "grow" },
             el("div", { class: "li-title" }, p.name),
             p.account_number ? el("div", { class: "li-sub" }, `${p.account_name} \u00b7 ${p.account_number}`) : null,

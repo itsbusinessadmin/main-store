@@ -413,6 +413,14 @@ code{font-family:var(--mono); font-size:.92em}
 .ph{display:grid; place-items:center; background:var(--card-2); color:var(--muted-2);
   font-size:20px; border:var(--hairline) solid var(--line)}
 .thumb{width:52px;height:52px;border-radius:var(--r-xs);object-fit:cover;flex:0 0 auto;background:var(--card-2)}
+/* A bank logo is not a photo: it must be contained, never cropped, and it sits
+   on white in both themes because that is the background every one of these
+   marks was drawn for — several are dark wordmarks that would vanish on the
+   dark card behind them. */
+.pay-mark{
+  object-fit:contain; padding:5px; background:#fff;
+  border:var(--hairline) solid var(--line);
+}
 .receipt-img{width:100%; max-height:460px; object-fit:contain; border-radius:var(--r-sm);
   background:var(--card-2); border:var(--hairline) solid var(--line)}
 .qr-img{width:140px; height:140px; object-fit:contain; border-radius:var(--r-sm);

@@ -9,7 +9,7 @@
        clickable step chips, and a product step that is genuinely optional
 */
 (function () {
-  const { $, $$, el, mount, icon, img, imgFallback, imagePicker, imageListPicker, dl, dlRow, money, dateFmt,
+  const { $, $$, el, mount, icon, img, imgFallback, payMark, imagePicker, imageListPicker, dl, dlRow, money, dateFmt,
           dateTimeFmt, store, theme, toast, modal, confirmDialog, debounce,
           fileToDataURL, copy, skeletons, empty, sortable } = UI;
 
@@ -904,7 +904,7 @@
       header("Payment methods", "How customers pay you",
         [el("button", { class: "btn primary sm", onclick: () => editMethod(null) }, "Add method")]),
       el("div", { class: "list" }, ...(methods.length ? methods.map(p => el("div", { class: "list-item" },
-        img(p.qr_file_id, { alt: "", cls: "thumb", fallback: imgFallback(icon("card")) }) || imgFallback(icon("card")),
+        payMark(p.name, { qrFileId: p.qr_file_id }),
         el("div", { class: "grow" },
           el("div", { class: "li-title" }, p.name),
           el("div", { class: "li-sub" }, [p.account_name, p.account_number].filter(Boolean).join(" \u00b7 ") || "No account details"),

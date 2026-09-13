@@ -5,9 +5,9 @@
 /* Bump on every release that changes a shell file. The shell is served
    cache-first, so a returning visitor keeps the cached copy until this string
    changes, a new worker installs and activate() drops the old cache. */
-const VERSION = "us-v10";
+const VERSION = "us-v11";
 const SHELL = [
-  "index.html", "css/app.css", "js/config.js", "js/icons.js", "js/ui.js", "js/api.js",
+  "index.html", "css/app.css", "js/config.js", "js/icons.js", "js/banks.js", "js/ui.js", "js/api.js",
   "js/customer.js", "manifest.json", "icons/icon.svg"
 ];
 

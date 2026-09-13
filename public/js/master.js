@@ -8,7 +8,7 @@
      - subscription extension accepts any number of days, not just presets
 */
 (function () {
-  const { $, $$, el, mount, icon, img, imgFallback, imagePicker, dl, dlRow, money, dateFmt,
+  const { $, $$, el, mount, icon, img, imgFallback, payMark, imagePicker, dl, dlRow, money, dateFmt,
           dateTimeFmt, store, theme, toast, modal, confirmDialog, debounce,
           copy, skeletons, empty } = UI;
   const C = window.US_CONFIG;
@@ -721,7 +721,7 @@
       header("Platform payment methods", "Shown to merchants at signup and renewal",
         [el("button", { class: "btn primary sm", onclick: () => editM(null) }, "Add method")]),
       el("div", { class: "list" }, ...(methods.length ? methods.map(p => el("div", { class: "list-item" },
-        img(p.qr_file_id, { alt: "", cls: "thumb", fallback: imgFallback(icon("card")) }) || imgFallback(icon("card")),
+        payMark(p.name, { qrFileId: p.qr_file_id }),
         el("div", { class: "grow" },
           el("div", { class: "li-title" }, p.name),
           el("div", { class: "li-sub" }, [p.account_name, p.account_number].filter(Boolean).join(" \u00b7 ") || "No account details")),
