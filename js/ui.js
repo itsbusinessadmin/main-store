@@ -39,9 +39,6 @@
     return host;
   }
 
-  const esc = s => String(s ?? "").replace(/[&<>"']/g, m =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
-
   /* ---------- Icons ----------
      Builds an <svg> from the shared US_ICONS path table. Icons are
      decorative by default (aria-hidden), because in this app every one of
@@ -62,9 +59,6 @@
     return svg;
   }
 
-  /* Icon + text on a button, spaced by .btn's own gap. */
-  const iconBtn = (name, ...kids) => [icon(name), ...kids];
-
   /* ---------- Images ----------
      File ids from the Worker look like "FILE-uuid" and are not URLs. Route
      everything through api.fileUrl(), which passes data: URLs straight through
@@ -76,10 +70,13 @@
       : `${C.API_BASE}/?action=file_get&id=${encodeURIComponent(id)}`;
   }
 
-  function img(id, { alt = "", cls = "", style = "", fallback = null } = {}) {
+  /* eager: for the hero, which is the largest element on the page and is
+     already in view -- lazy-loading it only delays the biggest paint. */
+  function img(id, { alt = "", cls = "", style = "", fallback = null, eager = false } = {}) {
     const src = fileSrc(id);
     if (!src) return fallback;
-    const node = el("img", { src, alt, class: cls || null, style: style || null, loading: "lazy" });
+    const node = el("img", { src, alt, class: cls || null, style: style || null,
+      loading: eager ? "eager" : "lazy", fetchpriority: eager ? "high" : null, decoding: "async" });
     node.addEventListener("error", () => {
       if (fallback && node.parentElement) node.replaceWith(fallback);
       else node.style.display = "none";
@@ -98,7 +95,6 @@
     d ? new Date(d).toLocaleDateString(undefined, o) : "\u2014";
   const dateTimeFmt = d => d ? new Date(d).toLocaleString(undefined,
     { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "\u2014";
-  const daysLeft = iso => Math.ceil((new Date(iso) - Date.now()) / 86400000);
 
   /* ---------- Definition rows (label / value, properly spaced) ---------- */
   const dlRow = (label, value, opts = {}) => {
@@ -356,7 +352,7 @@
     });
   }
 
-  w.UI = { $, $$, el, mount, esc, icon, iconBtn, img, fileSrc, imgFallback, imagePicker, imageListPicker, dl, dlRow,
-           money, dateFmt, dateTimeFmt, daysLeft, store, theme, toast, modal,
+  w.UI = { $, $$, el, mount, icon, img, fileSrc, imgFallback, imagePicker, imageListPicker, dl, dlRow,
+           money, dateFmt, dateTimeFmt, store, theme, toast, modal,
            confirmDialog, debounce, uid, fileToDataURL, copy, skeletons, empty, sortable };
 })(window);

@@ -2,10 +2,10 @@
    App shell: cache-first (instant loads, works offline).
    API reads:  network-first with a cached fallback.
    Anything non-GET is never cached. */
-const VERSION = "us-v6";
+const VERSION = "us-v7";
 const SHELL = [
   "index.html", "css/app.css", "js/config.js", "js/icons.js", "js/ui.js", "js/api.js",
-  "js/customer.js", "js/mock.js", "manifest.json", "icons/icon.svg"
+  "js/customer.js", "manifest.json", "icons/icon.svg"
 ];
 
 self.addEventListener("install", e => {

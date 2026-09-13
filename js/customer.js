@@ -111,7 +111,7 @@
     const photos = (S.store.hero_images || []).filter(Boolean);
     const media = $("#heroMedia");
     if (photos.length) {
-      const { gallery, dots, view } = buildGallery(photos, S.store.business_name, 3000);
+      const { gallery, dots, view } = buildGallery(photos, S.store.business_name, 3000, true);
       gallery.id = "heroGallery";
       if (dots) dots.id = "heroDots";
       mount(media, view, dots);
@@ -123,9 +123,9 @@
 
   /* Shared swipeable gallery + dot indicators, used by the hero and the
      product modal so both behave identically. */
-  function buildGallery(photos, altBase, autoplayMs) {
-    const gallery = el("div", { class: "gallery" }, ...photos.map(id => {
-      const photo = img(id, { alt: altBase || "" });
+  function buildGallery(photos, altBase, autoplayMs, eagerFirst = false) {
+    const gallery = el("div", { class: "gallery" }, ...photos.map((id, i) => {
+      const photo = img(id, { alt: altBase || "", eager: eagerFirst && i === 0 });
       if (!photo) return el("div", { class: "gal-slide" }, el("div", { class: "ph" }, "\u{1F4E6}"));
       /* The photo is shown uncropped, so a portrait or square shot leaves gaps
          in the fixed-height frame. A blurred, scaled copy of the same image
