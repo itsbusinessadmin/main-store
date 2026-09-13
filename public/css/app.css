@@ -312,7 +312,6 @@ code{font-family:var(--mono); font-size:.92em}
 .input-group{display:flex; gap:8px; align-items:stretch; flex-wrap:wrap}
 .input-group .input{flex:1 1 130px; min-width:0}
 .input-group .btn{flex:0 0 auto}
-.quick-picks{display:flex; gap:6px; flex-wrap:wrap; margin-top:10px}
 
 .switch{display:flex; align-items:center; gap:12px; min-height:var(--tap); cursor:pointer}
 .switch input{position:absolute; opacity:0; pointer-events:none}
@@ -691,17 +690,17 @@ html{scroll-padding-top:76px}
 .products[data-view="list"] .p-card{flex-direction:row; align-items:stretch}
 .products[data-view="list"] .p-card .img{width:104px; aspect-ratio:1; flex:0 0 auto}
 
-.fab{
-  position:fixed; right:16px; bottom:calc(16px + env(safe-area-inset-bottom)); z-index:44;
-  min-height:56px; padding:0 22px; border-radius:var(--r-pill); background:var(--brand); color:var(--brand-ink);
-  font-weight:700; box-shadow:var(--shadow-brand), var(--shadow-lg); display:inline-flex; align-items:center; gap:10px;
-  transition:transform var(--fast) var(--ease-spring); transform-origin:bottom right;
+/* Cart lives in the header. The button is always there so it can be found on
+   an empty cart too; the count rides the corner of the icon only once there is
+   something in it. */
+.cart-btn{position:relative; overflow:visible}
+.cart-btn .count{
+  position:absolute; top:-1px; right:-1px; min-width:19px; height:19px; padding:0 5px;
+  border-radius:var(--r-pill); background:var(--brand); color:var(--brand-ink);
+  font-size:11px; font-weight:700; line-height:19px; text-align:center;
+  border:2px solid var(--card); box-sizing:content-box;
 }
-.fab:hover{transform:translateY(-2px)}
-.fab:active{transform:scale(.95)}
-.fab .i{width:22px; height:22px}
-.fab .count{background:rgba(255,255,255,.22); border-radius:var(--r-pill); padding:1px 9px; font-size:var(--fs-sm)}
-.fab[hidden]{display:none}
+.cart-btn .count[hidden]{display:none}
 
 /* ---------- Modal / drawer / sheet ---------- */
 .scrim{
@@ -860,7 +859,7 @@ html{scroll-padding-top:76px}
 
 /* ---------- Print ---------- */
 @media print{
-  .topbar,.sidebar,.tabbar,.fab,.toasts,.btn{display:none !important}
+  .topbar,.sidebar,.tabbar,.toasts,.btn{display:none !important}
   body{background:#fff}
   .card{box-shadow:none; border-color:#ccc}
 }
