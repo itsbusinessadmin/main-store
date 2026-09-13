@@ -2,14 +2,20 @@
    App shell: cache-first (instant loads, works offline).
    API reads:  network-first with a cached fallback.
    Anything non-GET is never cached. */
-const VERSION = "us-v7";
+const VERSION = "us-v8";
 const SHELL = [
   "index.html", "css/app.css", "js/config.js", "js/icons.js", "js/ui.js", "js/api.js",
   "js/customer.js", "manifest.json", "icons/icon.svg"
 ];
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  /* addAll() is all-or-nothing: one 404 rejects the whole install, so
+     skipWaiting() never runs and every visitor stays on the previous worker
+     indefinitely. Adding each file on its own degrades to "that one file isn't
+     precached" instead of "the update never ships". */
+  e.waitUntil(caches.open(VERSION)
+    .then(c => Promise.all(SHELL.map(url => c.add(url).catch(() => {}))))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", e => {

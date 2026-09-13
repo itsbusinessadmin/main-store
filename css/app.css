@@ -43,7 +43,9 @@
   /* ---- Status ---- */
   --danger:#b3422f;
   --danger-bg:#fbece8;
-  --warn:#a8721c;
+  /* Darkened from #a8721c, which was 3.68:1 on --warn-bg and failed WCAG AA.
+     This clears 4.5:1 on every surface a warn badge can sit on. */
+  --warn:#8b5e17;
   --warn-bg:#faf1e0;
   --ok:#1f7a4d;
   --ok-bg:#e7f5ee;
@@ -215,7 +217,10 @@ code{font-family:var(--mono); font-size:.92em}
 .btn.sm{min-height:36px; padding:0 13px; font-size:var(--fs-sm)}
 .btn.lg{min-height:52px; padding:0 26px; font-size:var(--fs-lg)}
 .btn.block{width:100%}
-.btn.icon{width:var(--tap); min-height:var(--tap); padding:0; border-radius:50%}
+/* flex-shrink:0 matters: these sit in a flex row next to the store name, and a
+   long name squeezed them to 25px wide on a 320px phone -- round buttons that
+   were the right height and nowhere near wide enough to hit. */
+.btn.icon{width:var(--tap); min-height:var(--tap); padding:0; border-radius:50%; flex:0 0 auto}
 .btn-group{display:flex; gap:8px; flex-wrap:wrap}
 /* ---------- Icons ----------
    Every SVG that UI.icon() builds carries .i (static markup in the HTML files

@@ -124,7 +124,12 @@
   /* Shared swipeable gallery + dot indicators, used by the hero and the
      product modal so both behave identically. */
   function buildGallery(photos, altBase, autoplayMs, eagerFirst = false) {
-    const gallery = el("div", { class: "gallery" }, ...photos.map((id, i) => {
+    /* The gallery scrolls horizontally, so it needs to be focusable or keyboard
+       users cannot reach the photos past the first (WCAG 2.1.1). */
+    const gallery = el("div", {
+      class: "gallery", tabindex: "0", role: "group",
+      "aria-label": altBase ? `${altBase} photos` : "Photos"
+    }, ...photos.map((id, i) => {
       const photo = img(id, { alt: altBase || "", eager: eagerFirst && i === 0 });
       if (!photo) return el("div", { class: "gal-slide" }, el("div", { class: "ph" }, "\u{1F4E6}"));
       /* The photo is shown uncropped, so a portrait or square shot leaves gaps
@@ -212,14 +217,17 @@
 
   function renderCategories() {
     mount($("#categories"),
-      el("button", { class: "chip on", "data-cat": "", onclick: onCat }, "All"),
+      el("button", { class: "chip on", "data-cat": "", "aria-pressed": "true", onclick: onCat }, "All"),
       ...(S.store.categories || []).map(c =>
-        el("button", { class: "chip", "data-cat": c.category_id, onclick: onCat }, c.name)));
+        el("button", { class: "chip", "data-cat": c.category_id, "aria-pressed": "false", onclick: onCat }, c.name)));
   }
 
   function onCat(e) {
-    $$("#categories .chip").forEach(c => c.classList.remove("on"));
+    $$("#categories .chip").forEach(c => {
+      c.classList.remove("on"); c.setAttribute("aria-pressed", "false");
+    });
     e.currentTarget.classList.add("on");
+    e.currentTarget.setAttribute("aria-pressed", "true");
     S.category = e.currentTarget.dataset.cat;
     loadProducts(true);
   }
@@ -397,10 +405,13 @@
         isRequiredGroup(g, gi) ? null : el("span", { class: "xs muted" }, " \u00b7 optional")),
       el("div", { class: "chips wrap-" }, ...g.options.map(o => el("button", {
         class: "chip" + (chosen[gi] === o ? " on" : ""), type: "button",
+        "aria-pressed": chosen[gi] === o ? "true" : "false",
         onclick: e => {
           touched = true;
           const alreadyOn = e.currentTarget.classList.contains("on");
-          e.currentTarget.parentElement.querySelectorAll(".chip").forEach(c => c.classList.remove("on"));
+          e.currentTarget.parentElement.querySelectorAll(".chip").forEach(c => {
+            c.classList.remove("on"); c.setAttribute("aria-pressed", "false");
+          });
           /* An only-option required group has nothing to fall back to, so
              tapping it again must not clear it. */
           if (alreadyOn && !(isRequiredGroup(g, gi) && g.options.length === 1)) {
@@ -408,6 +419,7 @@
           } else {
             chosen[gi] = o;
             e.currentTarget.classList.add("on");
+            e.currentTarget.setAttribute("aria-pressed", "true");
           }
           refresh();
         }

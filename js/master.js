@@ -590,8 +590,13 @@
         stat("Database", d1.ok ? bytesFmt(d1.size_bytes) : "Unavailable",
           d1.ok ? `${(d1.rows_total || 0).toLocaleString()} rows` : d1.error),
         stat("DB response", d1.ok ? msFmt(d1.latency_ms) : "—", "Measured just now"),
-        stat("Files stored", kv.ok ? bytesFmt(kv.size_bytes) : "Unavailable",
-          kv.ok ? `${kv.files || 0} file(s)` : kv.error),
+        /* Sizes are only known for files uploaded since they started being
+           recorded. With none known, a bare "—" reads like an error, so lead
+           with the count we do know and keep size as the detail. */
+        (kv.ok && !kv.size_bytes && kv.files
+          ? stat("Files stored", `${kv.files} file(s)`, "Size not recorded for these")
+          : stat("Files stored", kv.ok ? bytesFmt(kv.size_bytes) : "Unavailable",
+              kv.ok ? `${kv.files || 0} file(s)` : kv.error)),
         stat("File store response", kv.ok ? msFmt(kv.latency_ms) : "—", "Measured just now")),
 
       kv.truncated
