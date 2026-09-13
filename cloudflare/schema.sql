@@ -202,11 +202,12 @@ CREATE TABLE IF NOT EXISTS usage_services (
 );
 CREATE INDEX IF NOT EXISTS idx_usage_sort ON usage_services(sort, name);
 
--- Migration for databases created before short links existed. SQLite has no
--- "ADD COLUMN IF NOT EXISTS", so these two lines error harmlessly on a database
--- that already has them; every runner used here reports and continues.
-ALTER TABLE stores ADD COLUMN store_no INTEGER;
-ALTER TABLE stores ADD COLUMN slug TEXT;
+-- A database created before short links existed has no store_no / slug column,
+-- and SQLite has no "ADD COLUMN IF NOT EXISTS". Those two ALTERs therefore live
+-- in migrate-short-links.sql rather than here: wrangler aborts the whole file on
+-- the first error, so an ALTER that is redundant on a current database would
+-- silently skip everything below it. Run that file once on an old database,
+-- then this one; this file alone is enough for a new database.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_stores_no ON stores(store_no);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_stores_slug_u ON stores(slug);
 -- Number any store that predates the column, oldest first.
