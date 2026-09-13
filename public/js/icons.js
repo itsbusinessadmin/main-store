@@ -82,6 +82,14 @@
     "sparkle":
       '<path d="M12 3.4 13.9 9 19.5 10.9 13.9 12.8 12 18.4 10.1 12.8 4.5 10.9 10.1 9Z"/><path d="M18.4 16.4l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7Z"/>',
 
+    /* Cash and a generic QR: the two payment methods that are not brands and
+       so have no logo to show. Drawn on the same grid as the rest of the set
+       so they sit level with a bank logo in the same row. */
+    "cash":
+      '<rect x="2.6" y="6.2" width="18.8" height="11.6" rx="2.4"/><circle cx="12" cy="12" r="2.9"/><path d="M6 10.1v3.8M18 10.1v3.8"/>',
+    "qr":
+      '<rect x="3.4" y="3.4" width="7" height="7" rx="1.8"/><rect x="13.6" y="3.4" width="7" height="7" rx="1.8"/><rect x="3.4" y="13.6" width="7" height="7" rx="1.8"/><path d="M6.5 6.5h.8M16.7 6.5h.8M6.5 16.7h.8" stroke-width="2.6"/><path d="M13.6 13.6h2.6M20.6 13.6h-2M13.6 16.9v1.4M17.4 17.2h1.6M20.6 20.6h-2M15.2 20.6h-1.6"/>',
+
     /* ---- Filled variants ----
        iOS marks the current tab by swapping the outline glyph for a solid
        one, not by underlining it. These are silhouettes: UI.icon() gives any

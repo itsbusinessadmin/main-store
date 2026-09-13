@@ -90,6 +90,36 @@
   const imgFallback = (glyph = icon("image"), cls = "thumb") =>
     el("div", { class: cls + " ph" }, glyph);
 
+  /* ---------- Payment marks ----------
+     Turns a payment method's free-typed name ("BPI", "gcash", "Cash on
+     delivery") into the right mark for a list row, in this order:
+
+       1. the bank or wallet's logo, when the name is recognisable
+       2. the merchant's own uploaded QR image
+       3. a generic card glyph
+
+     The logo comes first deliberately: it is what a customer scans a list
+     for. The merchant's QR is still shown full size once the method is
+     selected, which is the only place it can actually be scanned.
+
+     The <img> is decorative — every caller puts the method's name in the row
+     beside it — so alt is empty and the name is never announced twice. */
+  function payMark(name, { qrFileId = null, cls = "thumb" } = {}) {
+    const hit = w.US_BANKS?.match(name);
+    if (hit?.logo) {
+      return el("img", {
+        src: hit.logo, alt: "", class: cls + " pay-mark",
+        loading: "lazy", decoding: "async",
+        /* A missing or renamed logo file must not leave a broken-image icon
+           sitting in the row. */
+        onerror: function () { this.replaceWith(imgFallback(icon("card"), cls)); }
+      });
+    }
+    if (hit?.icon) return el("div", { class: cls + " ph" }, icon(hit.icon));
+    return img(qrFileId, { alt: "", cls, fallback: imgFallback(icon("card"), cls) })
+      || imgFallback(icon("card"), cls);
+  }
+
   /* ---------- Format ---------- */
   const money = n => C.CURRENCY_SYMBOL + Number(n || 0).toLocaleString(undefined, {
     minimumFractionDigits: 2, maximumFractionDigits: 2
@@ -412,7 +442,7 @@
     });
   }
 
-  w.UI = { $, $$, el, mount, icon, img, fileSrc, imgFallback, imagePicker, imageListPicker, dl, dlRow,
+  w.UI = { $, $$, el, mount, icon, img, fileSrc, imgFallback, payMark, imagePicker, imageListPicker, dl, dlRow,
            money, dateFmt, dateTimeFmt, store, theme, toast, modal,
            confirmDialog, debounce, uid, fileToDataURL, copy, skeletons, empty, sortable };
 })(window);
