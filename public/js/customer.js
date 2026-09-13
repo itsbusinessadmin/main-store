@@ -147,7 +147,7 @@
       "aria-label": altBase ? `${altBase} photos` : "Photos"
     }, ...photos.map((id, i) => {
       const photo = img(id, { alt: altBase || "", eager: eagerFirst && i === 0 });
-      if (!photo) return el("div", { class: "gal-slide" }, el("div", { class: "ph" }, "\u{1F4E6}"));
+      if (!photo) return el("div", { class: "gal-slide" }, el("div", { class: "ph" }, icon("package")));
       /* The photo is shown uncropped, so a portrait or square shot leaves gaps
          in the fixed-height frame. A blurred, scaled copy of the same image
          fills them, which reads far better than flat bars. It is decorative
@@ -272,7 +272,7 @@
       S.hasMore = !!r.has_more;
       renderProducts(reset, reset ? 0 : before);
     } catch (e) {
-      if ($("#products")) mount(host, empty("\u26A0\uFE0F", "Couldn't load products", e.message));
+      if ($("#products")) mount(host, empty(icon("warning"), "Couldn't load products", e.message));
     } finally { S.loading = false; }
   }
 
@@ -354,7 +354,7 @@
   function productCard(p) {
     const soldOut = p.stock <= 0;
     const photo = img(p.images?.[0], { alt: p.name, cls: "img" })
-      || el("div", { class: "img ph" }, "\u{1F4E6}");
+      || el("div", { class: "img ph" }, icon("package"));
     return el("button", { class: "p-card", onclick: () => openProduct(p) },
       photo,
       el("div", { class: "body" },
@@ -388,7 +388,7 @@
       : {
         dots: null,
         view: el("div", { class: "gal-view" },
-          el("div", { class: "gallery" }, el("div", { class: "gal-slide" }, el("div", { class: "ph" }, "\u{1F4E6}"))))
+          el("div", { class: "gallery" }, el("div", { class: "gal-slide" }, el("div", { class: "ph" }, icon("package")))))
       };
 
     const priceEl = el("div", { class: "bold", style: "font-size:1.35rem;color:var(--brand)" }, money(p.price));
@@ -503,7 +503,7 @@
     const paint = () => {
       mount(body,
         ...S.cart.map(l => el("div", { class: "cart-line" },
-          img(l.image, { alt: "" }) || el("div", { class: "ph", style: "width:62px;height:62px;border-radius:9px" }, "\u{1F4E6}"),
+          img(l.image, { alt: "" }) || el("div", { class: "ph", style: "width:62px;height:62px;border-radius:9px" }, icon("package")),
           el("div", { class: "grow" },
             el("div", { class: "bold" }, l.name),
             l.variantLabel ? el("div", { class: "xs muted" }, l.variantLabel) : null,
@@ -624,7 +624,7 @@
           class: "list-item" + (F.payment === p.method_id ? " selected" : ""), type: "button",
           onclick: () => { F.payment = p.method_id; render(); }
         },
-          img(p.qr_file_id, { alt: "", cls: "thumb", fallback: imgFallback("\u{1F4B3}") }) || imgFallback("\u{1F4B3}"),
+          img(p.qr_file_id, { alt: "", cls: "thumb", fallback: imgFallback(icon("card")) }) || imgFallback(icon("card")),
           el("div", { class: "grow" },
             el("div", { class: "li-title" }, p.name),
             p.account_number ? el("div", { class: "li-sub" }, `${p.account_name} \u00b7 ${p.account_number}`) : null,
@@ -691,7 +691,7 @@
 
     function stepDone() {
       return el("div", { class: "center", style: "padding:18px 0" },
-        el("div", { style: "font-size:46px" }, "\u2705"),
+        el("div", { style: "font-size:46px" }, icon("check")),
         el("h3", { class: "mt" }, "Order placed"),
         el("p", { class: "muted small mt" }, "Save your order number \u2014 you'll need it to check on your order."),
         el("div", { class: "card mt", style: "background:var(--brand-050);border-color:var(--brand)" },

@@ -14,12 +14,12 @@
   const C = window.US_CONFIG;
 
   const NAV = [
-    { id: "dashboard", label: "Dashboard", ico: "\u{1F4CA}" },
-    { id: "stores",    label: "Stores",    ico: "\u{1F3EA}" },
-    { id: "payments",  label: "Approvals", ico: "\u2705" },
-    { id: "plans",     label: "Plans",     ico: "\u{1F39F}\uFE0F" },
-    { id: "methods",   label: "Payments",  ico: "\u{1F4B3}" },
-    { id: "usage",     label: "Usage",     ico: "\u{1F4C8}" }
+    { id: "dashboard", label: "Dashboard", ico: "chart" },
+    { id: "stores",    label: "Stores",    ico: "store" },
+    { id: "payments",  label: "Approvals", ico: "check" },
+    { id: "plans",     label: "Plans",     ico: "ticket" },
+    { id: "methods",   label: "Payments",  ico: "card" },
+    { id: "usage",     label: "Usage",     ico: "chart" }
   ];
   /* usageAlerts drives the dot on the Usage nav entry. It is seeded from the
      dashboard (which returns the count cached by the last probe) and refreshed
@@ -128,15 +128,15 @@
         el("div", { class: "logo" }, "US"), el("span", {}, "Master Admin")),
       ...NAV.map(n => el("button", {
         class: "nav-item", "aria-current": S.section === n.id ? "page" : null, onclick: () => go(n.id)
-      }, el("span", { class: "ico" }, n.ico), n.label, alertDot(n.id))),
+      }, el("span", { class: "ico" }, icon(n.ico)), n.label, alertDot(n.id))),
       el("div", { style: "margin-top:auto" }),
       el("button", { class: "nav-item", onclick: () => theme.toggle() },
         el("span", { class: "ico", "data-theme-toggle": "" }, icon("moon")), "Theme"),
-      el("button", { class: "nav-item", onclick: signOut }, el("span", { class: "ico" }, "\u21A9\uFE0E"), "Sign out"));
+      el("button", { class: "nav-item", onclick: signOut }, el("span", { class: "ico" }, icon("undo")), "Sign out"));
 
     mount($("#tabbar"), ...NAV.map(n => el("button", {
       "aria-current": S.section === n.id ? "page" : null, onclick: () => go(n.id)
-    }, el("span", { class: "ico" }, n.ico), n.label, alertDot(n.id))));
+    }, el("span", { class: "ico" }, icon(n.ico)), n.label, alertDot(n.id))));
     theme.init();
   }
 
@@ -188,7 +188,7 @@
     }
     catch (e) {
       mount(m, header("Something went wrong"),
-        el("div", { class: "card" }, empty("\u26A0\uFE0F", "Couldn't load this page", e.message)));
+        el("div", { class: "card" }, empty(icon("warning"), "Couldn't load this page", e.message)));
     }
   }
 
@@ -215,7 +215,7 @@
           el("button", { class: "btn ghost sm", onclick: () => go("stores") }, "All stores")),
         (d.recent_stores || []).length
           ? el("div", { class: "list" }, ...d.recent_stores.map(storeRow))
-          : empty("\u{1F3EA}", "No stores yet", "Stores appear here as merchants sign up.")));
+          : empty(icon("store"), "No stores yet", "Stores appear here as merchants sign up.")));
   }
 
   function storeRow(s) {
@@ -236,7 +236,7 @@
       mount(list, ...skeletons(4, "skel line"));
       const r = await api.masterStores({ q, status });
       mount(list, ...(r.items.length ? r.items.map(storeRow)
-        : [empty("\u{1F3EA}", "No stores match", "Try a different filter.")]));
+        : [empty(icon("store"), "No stores match", "Try a different filter.")]));
     };
 
     const chips = el("div", { class: "chips" },
@@ -399,14 +399,14 @@
       el("div", { class: "list" }, ...(r.items.length ? r.items.map(p => el("button", {
         class: "list-item unseen", onclick: () => review(p)
       },
-        img(p.receipt_file_id, { alt: "", cls: "thumb", fallback: imgFallback("\u{1F9FE}") }) || imgFallback("\u{1F9FE}"),
+        img(p.receipt_file_id, { alt: "", cls: "thumb", fallback: imgFallback(icon("receipt")) }) || imgFallback(icon("receipt")),
         el("div", { class: "grow" },
           el("div", { class: "row between" },
             el("strong", { class: "truncate" }, p.store_name || "\u2014"),
             el("span", { class: "bold" }, money(p.amount))),
           el("div", { class: "li-sub" },
             `${p.plan_name || "\u2014"} \u00b7 ${p.kind} \u00b7 ${dateTimeFmt(p.created_at)}`))))
-        : [empty("\u2705", "All caught up", "No payments are waiting for review.")])));
+        : [empty(icon("check"), "All caught up", "No payments are waiting for review.")])));
 
     function review(p) {
       const approve = el("button", { class: "btn primary" }, "Approve");
@@ -473,7 +473,7 @@
           el("div", { class: "li-sub" }, `${p.duration_days} days${p.blurb ? " \u00b7 " + p.blurb : ""}`)),
         el("div", { class: "bold" }, money(p.price)),
         el("button", { class: "btn ghost sm", onclick: () => editPlan(p) }, icon("pencil"), "Edit")))
-        : [empty("\u{1F39F}\uFE0F", "No plans yet", "Add one so merchants have something to buy.")])));
+        : [empty(icon("ticket"), "No plans yet", "Add one so merchants have something to buy.")])));
 
     function editPlan(p) {
       const F = { plan_id: p?.plan_id, name: p?.name || "", price: p?.price ?? "",
@@ -713,12 +713,12 @@
       header("Platform payment methods", "Shown to merchants at signup and renewal",
         [el("button", { class: "btn primary sm", onclick: () => editM(null) }, "Add method")]),
       el("div", { class: "list" }, ...(methods.length ? methods.map(p => el("div", { class: "list-item" },
-        img(p.qr_file_id, { alt: "", cls: "thumb", fallback: imgFallback("\u{1F4B3}") }) || imgFallback("\u{1F4B3}"),
+        img(p.qr_file_id, { alt: "", cls: "thumb", fallback: imgFallback(icon("card")) }) || imgFallback(icon("card")),
         el("div", { class: "grow" },
           el("div", { class: "li-title" }, p.name),
           el("div", { class: "li-sub" }, [p.account_name, p.account_number].filter(Boolean).join(" \u00b7 ") || "No account details")),
         el("button", { class: "btn ghost sm", onclick: () => editM(p) }, icon("pencil"), "Edit")))
-        : [empty("\u{1F4B3}", "No payment methods yet", "Add how merchants should pay you.")])));
+        : [empty(icon("card"), "No payment methods yet", "Add how merchants should pay you.")])));
 
     function editM(p) {
       const F = { method_id: p?.method_id, name: p?.name || "", account_name: p?.account_name || "",

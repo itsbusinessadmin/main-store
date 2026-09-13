@@ -14,13 +14,13 @@
           fileToDataURL, copy, skeletons, empty, sortable } = UI;
 
   const NAV = [
-    { id: "dashboard",   label: "Dashboard",   ico: "\u{1F4CA}" },
-    { id: "orders",      label: "Orders",      ico: "\u{1F9FE}" },
-    { id: "catalog",     label: "Catalog",     ico: "\u{1F4E6}" },
-    { id: "payments",    label: "Payments",    ico: "\u{1F4B3}" },
-    { id: "fulfillment", label: "Fulfillment", ico: "\u{1F69A}" },
-    { id: "settings",    label: "Store",       ico: "\u2699\uFE0F" },
-    { id: "subscription",label: "Plan",        ico: "\u{1F39F}\uFE0F" }
+    { id: "dashboard",   label: "Dashboard",   ico: "chart" },
+    { id: "orders",      label: "Orders",      ico: "receipt" },
+    { id: "catalog",     label: "Catalog",     ico: "package" },
+    { id: "payments",    label: "Payments",    ico: "card" },
+    { id: "fulfillment", label: "Fulfillment", ico: "truck" },
+    { id: "settings",    label: "Store",       ico: "gear" },
+    { id: "subscription",label: "Plan",        ico: "ticket" }
   ];
   const ALLOWED = {
     INITIAL_SETUP: ["wizard"],
@@ -185,14 +185,14 @@
         el("span", { class: "truncate" }, S.store.business_name)),
       ...NAV.filter(n => allowed.includes(n.id)).map(n => el("button", {
         class: "nav-item", "aria-current": S.section === n.id ? "page" : null, onclick: () => go(n.id)
-      }, el("span", { class: "ico" }, n.ico), n.label)),
+      }, el("span", { class: "ico" }, icon(n.ico)), n.label)),
       el("div", { style: "margin-top:auto" }),
       el("button", { class: "nav-item", onclick: () => theme.toggle() },
         el("span", { class: "ico", "data-theme-toggle": "" }, icon("moon")), "Theme"),
-      el("button", { class: "nav-item", onclick: logout }, el("span", { class: "ico" }, "\u21A9\uFE0E"), "Sign out"));
+      el("button", { class: "nav-item", onclick: logout }, el("span", { class: "ico" }, icon("undo")), "Sign out"));
     mount(tabs, ...NAV.filter(n => allowed.includes(n.id)).map(n => el("button", {
       "aria-current": S.section === n.id ? "page" : null, onclick: () => go(n.id)
-    }, el("span", { class: "ico" }, n.ico), n.label)));
+    }, el("span", { class: "ico" }, icon(n.ico)), n.label)));
     theme.init();
   }
 
@@ -218,13 +218,13 @@
     try { await (map[S.section] || viewBlocked)(m); }
     catch (e) {
       mount(m, header("Something went wrong"),
-        el("div", { class: "card" }, empty("\u26A0\uFE0F", "Couldn't load this page", e.message)));
+        el("div", { class: "card" }, empty(icon("warning"), "Couldn't load this page", e.message)));
     }
   }
 
   function viewBlocked(m) {
     mount(m, header("Store suspended"),
-      el("div", { class: "locked" }, el("div", { class: "ico" }, "\u{1F512}"),
+      el("div", { class: "locked" }, el("div", { class: "ico" }, icon("lock")),
         el("h3", {}, "Access is locked"),
         el("p", { class: "small mt" }, "This store has been suspended by the platform owner. Please get in touch with them to restore access."),
         el("button", { class: "btn ghost mt", onclick: logout }, "Sign out")));
@@ -321,7 +321,7 @@
           el("button", { class: "btn ghost sm", onclick: () => go("orders") }, "View all")),
         d.recent && d.recent.length
           ? el("div", { class: "list" }, ...d.recent.map(orderRow))
-          : empty("\u{1F9FE}", "No orders yet", "Share your shop link to get your first one.")));
+          : empty(icon("receipt"), "No orders yet", "Share your shop link to get your first one.")));
   }
 
   function orderRow(o) {
@@ -345,7 +345,7 @@
       const r = await api.storeOrders({ status, q });
       S.data.orders = r.items;
       mount(list, ...(r.items.length ? r.items.map(orderRow)
-        : [empty("\u{1F9FE}", "No orders here", "Try a different filter.")]));
+        : [empty(icon("receipt"), "No orders here", "Try a different filter.")]));
     };
 
     const chips = el("div", { class: "chips" },
@@ -454,15 +454,15 @@
       mount(list, ...(prods.length ? prods.map(p => el("div", {
         class: "list-item", draggable: "true", dataset: { sortId: p.product_id }
       },
-        el("span", { class: "drag-handle" }, "\u283F"),
-        img(p.images?.[0], { alt: "", cls: "thumb", fallback: imgFallback("\u{1F4E6}") }) || imgFallback("\u{1F4E6}"),
+        el("span", { class: "drag-handle" }, icon("drag")),
+        img(p.images?.[0], { alt: "", cls: "thumb", fallback: imgFallback(icon("package")) }) || imgFallback(icon("package")),
         el("div", { class: "grow" },
           el("div", { class: "li-title truncate" }, p.name),
           el("div", { class: "li-sub" },
             `${money(p.price)} \u00b7 ${p.stock > 0 ? p.stock + " in stock" : "Sold out"}` +
             (p.variant_groups?.length ? ` \u00b7 ${p.variant_groups.length} variant group(s)` : ""))),
         el("button", { class: "btn ghost sm", onclick: () => editProduct(p) }, icon("pencil"), "Edit")))
-        : [empty("\u{1F4E6}", "No products yet", "Add your first product to open for business.")]));
+        : [empty(icon("package"), "No products yet", "Add your first product to open for business.")]));
       sortable(list, ids => api.storeReorderProducts(ids)
         .then(() => toast("Order saved", "ok")).catch(e => toast(e.message, "err")));
     };
@@ -644,14 +644,14 @@
       header("Payment methods", "How customers pay you",
         [el("button", { class: "btn primary sm", onclick: () => editMethod(null) }, "Add method")]),
       el("div", { class: "list" }, ...(methods.length ? methods.map(p => el("div", { class: "list-item" },
-        img(p.qr_file_id, { alt: "", cls: "thumb", fallback: imgFallback("\u{1F4B3}") }) || imgFallback("\u{1F4B3}"),
+        img(p.qr_file_id, { alt: "", cls: "thumb", fallback: imgFallback(icon("card")) }) || imgFallback(icon("card")),
         el("div", { class: "grow" },
           el("div", { class: "li-title" }, p.name),
           el("div", { class: "li-sub" }, [p.account_name, p.account_number].filter(Boolean).join(" \u00b7 ") || "No account details"),
           el("div", { class: "li-sub" },
             ((p.valid_for || []).join(", ") || "all fulfillment types") + (p.requires_proof ? " \u00b7 proof required" : ""))),
         el("button", { class: "btn ghost sm", onclick: () => editMethod(p) }, icon("pencil"), "Edit")))
-        : [empty("\u{1F4B3}", "No payment methods yet", "Add at least one so customers can check out.")])));
+        : [empty(icon("card"), "No payment methods yet", "Add at least one so customers can check out.")])));
 
     function editMethod(p) {
       const F = { method_id: p?.method_id, name: p?.name || "", account_name: p?.account_name || "",
@@ -969,7 +969,7 @@
               el("td", { dataset: { label: "Type" } }, h.kind),
               el("td", { dataset: { label: "Amount" } }, money(h.amount)),
               el("td", { dataset: { label: "Status" } }, el("span", { class: "badge " + ({ APPROVED: "ok", PENDING: "warn", REJECTED: "danger" }[h.status] || "") }, h.status)))))))
-          : empty("\u{1F39F}\uFE0F", "No payments yet")));
+          : empty(icon("ticket"), "No payments yet")));
   }
 
   /* ================= Guided setup wizard ================= */
@@ -1002,7 +1002,7 @@
 
     const nav = el("div", { class: "wizard-nav" });
     const body = el("div", { class: "card mt" });
-    const back = el("button", { class: "btn ghost" }, "\u2190 Back");
+    const back = el("button", { class: "btn ghost" }, icon("arrow-left"), "Back");
     const skip = el("button", { class: "btn ghost" }, "Skip for now");
     const next = el("button", { class: "btn primary" }, "Continue");
 
@@ -1201,7 +1201,7 @@
 
         const r = await api.storeCompleteSetup();
         S.store = r.store;
-        toast("Your store is live \u{1F389}", "ok");
+        toast("Your store is live", "ok");
         onLogin({ store: S.store, settings: S.settings });
       } catch (e) {
         toast(e.message || "Setup couldn't be saved. Please try again.", "err", 6000);

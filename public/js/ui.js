@@ -83,7 +83,7 @@
     return node;
   }
 
-  const imgFallback = (glyph = "\u{1F5BC}\uFE0F", cls = "thumb") =>
+  const imgFallback = (glyph = icon("image"), cls = "thumb") =>
     el("div", { class: cls + " ph" }, glyph);
 
   /* ---------- Format ---------- */
@@ -137,7 +137,11 @@
     toggle() {
       this.apply(document.documentElement.getAttribute("data-color-mode") === "dark" ? "light" : "dark");
     },
-    accent(hex) { if (hex) document.documentElement.style.setProperty("--brand", hex); }
+    /* A merchant's colour is an ACCENT, not the primary button. Primary stays
+       ink so every store looks composed regardless of the colour chosen; the
+       merchant's colour carries links, the active category and highlights,
+       which is where it actually reads as theirs. */
+    accent(hex) { if (hex) document.documentElement.style.setProperty("--accent", hex); }
   };
 
   /* ---------- Toasts ---------- */
@@ -240,7 +244,7 @@
               e.stopPropagation(); current = ""; onChange && onChange(""); paint();
             } }, "Remove")));
       } else {
-        mount(box, el("div", { class: "up-ico" }, "\u{1F4F7}"), el("div", { class: "small" }, label));
+        mount(box, el("div", { class: "up-ico" }, icon("camera")), el("div", { class: "small" }, label));
       }
     };
 
@@ -267,7 +271,7 @@
     const paint = () => {
       mount(grid,
         ...list.map((id, i) => el("div", { class: "img-tile" },
-          img(id, { alt: "" }) || el("div", { class: "ph" }, "\u{1F5BC}\uFE0F"),
+          img(id, { alt: "" }) || el("div", { class: "ph" }, icon("image")),
           el("button", { type: "button", class: "rm", "aria-label": "Remove photo", onclick: () => {
             list.splice(i, 1); onChange && onChange(list); paint();
           } }, icon("x", { size: 15 })))),
