@@ -806,7 +806,10 @@ html{scroll-padding-top:76px}
 
 /* ---------- Toasts ---------- */
 .toasts{position:fixed; left:50%; transform:translateX(-50%); bottom:calc(80px + env(safe-area-inset-bottom)); z-index:80; display:flex; flex-direction:column; gap:8px; width:min(420px,calc(100% - 32px)); pointer-events:none}
-@media (min-width:1024px){ .toasts{bottom:24px; left:auto; right:24px; transform:none} }
+/* Bottom-centre at every width. The base rule already centres; desktop only
+   needs a smaller lift, because the cart FAB and tab bar it clears on a phone
+   are not in the way there. */
+@media (min-width:1024px){ .toasts{bottom:24px} }
 .toast{
   background:var(--text); color:var(--bg); padding:13px 16px; border-radius:var(--r-sm);
   box-shadow:var(--shadow-lg); font-size:var(--fs-sm); font-weight:600;
