@@ -114,13 +114,55 @@ function priceFor(prod, variant) {
   }, prod.price);
 }
 
+/* ---------- short links ----------
+   A storefront can be reached three ways: its number (bilihan.shop/7), its
+   custom name (bilihan.shop/verde) or the original SHOP- id, which keeps
+   working so links already shared never break. */
+
+/* Paths the app itself owns, so a merchant cannot take one as a store name and
+   shadow a real page. */
+const RESERVED_SLUGS = new Set([
+  "admin", "master", "api", "assets", "css", "js", "icons", "img", "images",
+  "index", "manifest", "service-worker", "sw", "favicon", "robots", "sitemap",
+  "about", "help", "support", "terms", "privacy", "login", "signup", "store",
+  "stores", "new", "static", "public", "well-known"
+]);
+
+function normaliseSlug(raw) {
+  const slug = String(raw || "").trim().toLowerCase();
+  if (!slug) return "";
+  if (!/^[a-z0-9][a-z0-9-]{1,31}$/.test(slug))
+    bad("A store name must be 2–32 characters: letters, numbers and hyphens only.", "VALIDATION");
+  if (/^\d+$/.test(slug))
+    bad("A store name can't be only numbers — those are reserved for store numbers.", "VALIDATION");
+  if (slug.endsWith("-")) bad("A store name can't end with a hyphen.", "VALIDATION");
+  if (RESERVED_SLUGS.has(slug)) bad(`"${slug}" is reserved. Please choose another name.`, "VALIDATION");
+  return slug;
+}
+
+/* One statement covers all three forms so a lookup is never more than one
+   query, whichever kind of link the customer followed. */
+function storeByRef(env, ref, extraWhere = "") {
+  const r = String(ref || "").trim();
+  const num = /^\d+$/.test(r) ? Number(r) : -1;
+  return env.DB.prepare(
+    `SELECT * FROM stores WHERE (public_store_id = ? OR slug = ? OR store_no = ?)${extraWhere} LIMIT 1`
+  ).bind(r.toUpperCase(), r.toLowerCase(), num);
+}
+
+/* Numbers are handed out in sequence. The UNIQUE index is the real guard: if
+   two signups race for the same number the loser retries rather than failing. */
+async function nextStoreNo(env) {
+  const row = await env.DB.prepare("SELECT COALESCE(MAX(store_no), 0) + 1 AS n FROM stores").first();
+  return row?.n || 1;
+}
+
 /* ========================= ACTIONS ========================= */
 const A = {};
 
 /* ---- Public storefront ---- */
 A.public_get_store = async (env, body) => {
-  const s = await env.DB.prepare("SELECT * FROM stores WHERE public_store_id = ?")
-    .bind(String(body.public_store_id || "").toUpperCase()).first();
+  const s = await storeByRef(env, body.public_store_id).first();
   if (!s) bad("We couldn't find that store.", "NOT_FOUND", 404);
   await refreshLifecycle(env, s);
   if (!s.customer_store_enabled) bad("This store isn't open right now.", "STORE_CLOSED", 403);
@@ -139,6 +181,7 @@ A.public_get_store = async (env, body) => {
 
   return {
     public_store_id: s.public_store_id, business_name: s.business_name, status: s.status,
+    store_no: s.store_no, slug: s.slug || "",
     customer_store_enabled: !!s.customer_store_enabled,
     logo: set?.logo_file_id || "", accent_color: set?.accent_color || "#173d24",
     announcement: set?.announcement || "", tagline: set?.tagline || "",
@@ -154,8 +197,7 @@ A.public_get_store = async (env, body) => {
 };
 
 A.public_list_products = async (env, body) => {
-  const s = await env.DB.prepare("SELECT store_id FROM stores WHERE public_store_id=? AND customer_store_enabled=1")
-    .bind(String(body.public_store_id || "").toUpperCase()).first();
+  const s = await storeByRef(env, body.public_store_id, " AND customer_store_enabled=1").first();
   if (!s) bad("Store not found.", "NOT_FOUND", 404);
   const limit = Math.min(Number(body.limit) || 20, 60);
   const offset = Math.max(Number(body.offset) || 0, 0);
@@ -178,8 +220,7 @@ A.public_get_product = async (env, body) => {
 };
 
 A.public_validate_cart = async (env, body) => {
-  const s = await env.DB.prepare("SELECT store_id FROM stores WHERE public_store_id=?")
-    .bind(String(body.public_store_id || "").toUpperCase()).first();
+  const s = await storeByRef(env, body.public_store_id).first();
   if (!s) bad("Store not found.", "NOT_FOUND", 404);
   const issues = [], items = [];
   for (const it of body.items || []) {
@@ -198,8 +239,7 @@ A.public_validate_cart = async (env, body) => {
 };
 
 A.public_place_order = async (env, body) => {
-  const s = await env.DB.prepare("SELECT * FROM stores WHERE public_store_id=? AND customer_store_enabled=1")
-    .bind(String(body.public_store_id || "").toUpperCase()).first();
+  const s = await storeByRef(env, body.public_store_id, " AND customer_store_enabled=1").first();
   if (!s) bad("This store isn't accepting orders right now.", "STORE_CLOSED", 403);
   if (!body.customer_name?.trim() || !body.mobile?.trim()) bad("Your name and mobile number are required.", "VALIDATION");
   if (!body.items?.length) bad("Your cart is empty.", "VALIDATION");
@@ -253,8 +293,7 @@ A.public_place_order = async (env, body) => {
 };
 
 A.public_track_order = async (env, body) => {
-  const s = await env.DB.prepare("SELECT store_id FROM stores WHERE public_store_id=?")
-    .bind(String(body.public_store_id || "").toUpperCase()).first();
+  const s = await storeByRef(env, body.public_store_id).first();
   if (!s) bad("Store not found.", "NOT_FOUND", 404);
   const o = await env.DB.prepare("SELECT * FROM orders WHERE store_id=? AND UPPER(order_number)=UPPER(?)")
     .bind(s.store_id, String(body.order_number || "").trim()).first();
@@ -284,14 +323,15 @@ A.store_signup = async (env, body) => {
   if (!plan) bad("Please choose a valid plan.", "VALIDATION");
 
   const storeId = newId("STR"), publicId = newId("SHOP"), created = nowIso();
+  const storeNo = await nextStoreNo(env);
   let receipt = body.receipt_file_id || "";
   if (receipt.startsWith("data:")) receipt = await putFile(env, receipt, "receipt");
 
   const stmts = [
     env.DB.prepare(`INSERT INTO stores (store_id, public_store_id, business_name, owner_name, owner_email,
-      status, access_level, customer_store_enabled, plan_id, created_at, order_seq)
-      VALUES (?,?,?,?,?, 'PENDING_VERIFICATION','SUBSCRIPTION_ONLY',0, ?, ?, 1000)`)
-      .bind(storeId, publicId, body.business_name.trim(), body.owner_name.trim(), body.owner_email.trim().toLowerCase(), body.plan_id, created),
+      status, access_level, customer_store_enabled, plan_id, created_at, order_seq, store_no)
+      VALUES (?,?,?,?,?, 'PENDING_VERIFICATION','SUBSCRIPTION_ONLY',0, ?, ?, 1000, ?)`)
+      .bind(storeId, publicId, body.business_name.trim(), body.owner_name.trim(), body.owner_email.trim().toLowerCase(), body.plan_id, created, storeNo),
     env.DB.prepare(`INSERT INTO store_settings (store_id, logo_file_id, accent_color, announcement, tagline, contact,
       hero_kicker, hero_heading, hero_subheading, hero_cta_text, hero_images)
       VALUES (?,'','#173d24','','','[]','','','','','[]')`).bind(storeId),
@@ -521,6 +561,20 @@ A.store_complete_setup = async (env, body, ctx) => {
   await env.DB.prepare("UPDATE stores SET access_level='FULL_ADMIN', customer_store_enabled=1 WHERE store_id=?").bind(s.store_id).run();
   const store = await env.DB.prepare("SELECT * FROM stores WHERE store_id=?").bind(s.store_id).first();
   return { store };
+};
+
+A.store_set_slug = async (env, body, ctx) => {
+  const s = requireAccess(await currentStore(env, ctx.req, body), ["FULL_ADMIN"]);
+  const slug = normaliseSlug(body.slug);
+  if (!slug) {
+    await env.DB.prepare("UPDATE stores SET slug=NULL WHERE store_id=?").bind(s.store_id).run();
+    return { slug: "", store_no: s.store_no };
+  }
+  const taken = await env.DB.prepare("SELECT store_id FROM stores WHERE slug=? AND store_id<>?")
+    .bind(slug, s.store_id).first();
+  if (taken) bad("That name is already taken. Please choose another.", "VALIDATION");
+  await env.DB.prepare("UPDATE stores SET slug=? WHERE store_id=?").bind(slug, s.store_id).run();
+  return { slug, store_no: s.store_no };
 };
 
 A.store_get_subscription = async (env, body, ctx) => {
@@ -974,6 +1028,40 @@ export default {
         "Cache-Control": "public, max-age=31536000, immutable",
         "Access-Control-Allow-Origin": origin
       } });
+    }
+
+    /* ---- Static site + short links ----
+       The Worker runs before the asset handler (run_worker_first), so it can
+       tell an API call from a page request and map a short link onto the
+       storefront. Anything that isn't an API call is a page. */
+    if (env.ASSETS && req.method !== "POST" && !url.searchParams.has("action")) {
+      const path = url.pathname.replace(/\/+$/, "");
+
+      /* Friendly paths for the two admin apps. */
+      const PAGE_ALIAS = { "/admin": "/admin.html", "/master": "/master.html" };
+      if (PAGE_ALIAS[path]) {
+        return env.ASSETS.fetch(new Request(new URL(PAGE_ALIAS[path], url), req));
+      }
+
+      /* A single path segment that is not a real file is a store reference:
+         /7, /verde or /SHOP-XXXX-XXXX-XXXX. Serve the storefront shell and let
+         it read the reference back out of its own URL. */
+      const seg = path.slice(1);
+      if (seg && !seg.includes("/") && !seg.includes(".")) {
+        const asset = await env.ASSETS.fetch(new Request(new URL(path, url), req));
+        if (asset.status === 404) {
+          const shell = await env.ASSETS.fetch(new Request(new URL("/index.html", url), req));
+          /* 200, not a redirect: the customer keeps the short URL they were
+             given, and the address bar never shows the long one. */
+          return new Response(shell.body, {
+            status: shell.status,
+            headers: { ...Object.fromEntries(shell.headers), "Cache-Control": "no-cache" }
+          });
+        }
+        return asset;
+      }
+
+      return env.ASSETS.fetch(req);
     }
 
     try {

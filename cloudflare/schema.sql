@@ -19,8 +19,15 @@ CREATE TABLE IF NOT EXISTS stores (
   subscription_start      TEXT,
   subscription_expiry     TEXT,
   order_seq               INTEGER NOT NULL DEFAULT 1000,
-  created_at              TEXT NOT NULL
+  created_at              TEXT NOT NULL,
+  -- Short public link. store_no is handed out in sequence so every store has a
+  -- link the moment it exists (bilihan.shop/7); slug is an optional friendlier
+  -- name the merchant can set later (bilihan.shop/verde). Both resolve to the
+  -- same storefront, and public_store_id keeps working for old links.
+  store_no                INTEGER UNIQUE,
+  slug                    TEXT UNIQUE
 );
+CREATE INDEX IF NOT EXISTS idx_stores_slug ON stores(slug);
 CREATE INDEX IF NOT EXISTS idx_stores_status ON stores(status);
 CREATE INDEX IF NOT EXISTS idx_stores_public ON stores(public_store_id);
 
@@ -194,6 +201,19 @@ CREATE TABLE IF NOT EXISTS usage_services (
   updated_at      TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_usage_sort ON usage_services(sort, name);
+
+-- Migration for databases created before short links existed. SQLite has no
+-- "ADD COLUMN IF NOT EXISTS", so these two lines error harmlessly on a database
+-- that already has them; every runner used here reports and continues.
+ALTER TABLE stores ADD COLUMN store_no INTEGER;
+ALTER TABLE stores ADD COLUMN slug TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_stores_no ON stores(store_no);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_stores_slug_u ON stores(slug);
+-- Number any store that predates the column, oldest first.
+UPDATE stores SET store_no = (
+  SELECT COUNT(*) FROM stores AS earlier
+  WHERE earlier.created_at <= stores.created_at
+) WHERE store_no IS NULL;
 
 -- Starter data
 INSERT OR IGNORE INTO subscription_plans (plan_id, name, price, duration_days, blurb, is_active) VALUES

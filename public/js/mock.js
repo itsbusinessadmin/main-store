@@ -16,7 +16,7 @@
     const created = now();
     const store = {
       store_id: "STR-DEMO-2K4X-9QW1",
-      public_store_id: "SHOP-DEMO-7H3M-2P8L",
+      public_store_id: "SHOP-DEMO-7H3M-2P8L", store_no: 1, slug: "verde",
       business_name: "Verde & Co.",
       owner_name: "Jordan S.",
       owner_email: "owner@verde.example",
@@ -126,7 +126,15 @@
   function reset() { db = seed(); save(); return db; }
 
   const findStore = id => db.stores.find(s => s.store_id === id);
-  const findPublic = pid => db.stores.find(s => s.public_store_id === pid);
+  /* Mirrors the Worker: a store answers to its number, its custom name or its
+     original SHOP- id. */
+  const findPublic = ref => {
+    const r = String(ref || "").trim();
+    return db.stores.find(s =>
+      s.public_store_id === r.toUpperCase() ||
+      (s.slug && s.slug === r.toLowerCase()) ||
+      (s.store_no != null && String(s.store_no) === r));
+  };
   const err = (msg, code = "ERROR") => { const e = new Error(msg); e.code = code; throw e; };
 
   /* Lifecycle: recompute status/access from the subscription clock (BRAIN.md §5). */
@@ -161,6 +169,7 @@
     const st = storeSettings(s.store_id);
     return {
       public_store_id: s.public_store_id, business_name: s.business_name, status: s.status,
+      store_no: s.store_no, slug: s.slug || "",
       customer_store_enabled: !!s.customer_store_enabled, logo: st.logo_file_id,
       accent_color: st.accent_color, announcement: st.announcement, tagline: st.tagline,
       hero_kicker: st.hero_kicker || "", hero_heading: st.hero_heading || "",
@@ -502,6 +511,16 @@
       if (method.method_id) { const i = db.masterPay.findIndex(x => x.method_id === method.method_id); db.masterPay[i] = { ...db.masterPay[i], ...method }; }
       else db.masterPay.push({ ...method, method_id: "MPM-" + Date.now(), is_active: 1 });
       save(); return { ok: true };
+    },
+
+    store_set_slug: ({ slug }, api) => {
+      const s = requireStore(api);
+      const v = String(slug || "").trim().toLowerCase();
+      if (v && !/^[a-z0-9][a-z0-9-]{1,31}$/.test(v)) err("A store name must be 2\u201332 characters: letters, numbers and hyphens only.", "VALIDATION");
+      if (v && /^\d+$/.test(v)) err("A store name can't be only numbers \u2014 those are reserved for store numbers.", "VALIDATION");
+      if (v && db.stores.some(x => x.slug === v && x.store_id !== s.store_id)) err("That name is already taken. Please choose another.", "VALIDATION");
+      s.slug = v || null; save();
+      return { slug: v, store_no: s.store_no };
     },
 
     /* ---------- Usage ---------- */

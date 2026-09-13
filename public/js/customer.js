@@ -18,13 +18,22 @@
   const C = window.US_CONFIG;
 
   const params = new URLSearchParams(location.search);
-  const PUBLIC_ID = (params.get("store") || "").trim().toUpperCase();
+
+  /* A storefront can be reached three ways: a short link (/7 or /verde), the
+     original ?store=SHOP-... link, or nothing at all. The server resolves all
+     three forms, so whatever the URL carries is passed through untouched —
+     upper-casing here would break custom names. A path segment containing a
+     dot is a real file, not a store reference. */
+  const pathRef = decodeURIComponent(location.pathname.split("/").filter(Boolean).pop() || "");
+  const PUBLIC_ID = (params.get("store") || (pathRef.includes(".") ? "" : pathRef) || "").trim();
 
   const S = {
     store: null, products: [], offset: 0, hasMore: true, loading: false,
     q: "", category: "", view: store.get("view", "grid"), cart: []
   };
-  const cartKey = () => "cart:" + PUBLIC_ID;
+  /* Keyed by the store's canonical id, not by whatever link the customer
+     happened to follow, so /7 and /verde are the same cart. */
+  const cartKey = () => "cart:" + (S.store?.public_store_id || PUBLIC_ID);
   const FF_LABEL = { delivery: "Delivery", pickup: "Pickup", meetup: "Meet-up" };
 
   /* ---------------- Boot ---------------- */
@@ -35,7 +44,7 @@
 
     if (!PUBLIC_ID) {
       return fatal("No store selected",
-        "This link is missing its store code. Ask the seller for their storefront link \u2014 it should look like \u2026/index.html?store=SHOP-XXXX-XXXX-XXXX");
+        "This link is missing its store code. Ask the seller for their storefront link \u2014 it should look like \u2026/7 or \u2026/their-shop-name.");
     }
 
     try {
@@ -57,6 +66,13 @@
     renderCategories();
     setTimeout(() => $("#splash").classList.add("gone"), 120);
     renderCartFab();
+  }
+
+  /* The tidiest link this store has: its custom name, then its number, then
+     the original query-string form as a fallback. */
+  function shortLink() {
+    const ref = S.store?.slug || S.store?.store_no;
+    return ref ? `${location.origin}/${ref}` : location.href;
   }
 
   function fatal(title, msg) {
@@ -788,7 +804,7 @@
                   : c.type,
                 c.value))))
           : null,
-        el("button", { class: "btn ghost block", onclick: () => copy(location.href) }, "Copy storefront link"))
+        el("button", { class: "btn ghost block", onclick: () => copy(shortLink()) }, "Copy storefront link"))
     });
   }
 
