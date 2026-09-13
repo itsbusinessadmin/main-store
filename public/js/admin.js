@@ -250,15 +250,27 @@
      PAID used to be blue, which read as "information" rather than "confirmed". */
   const STATUS_TONE = { PENDING: "warn", UNPAID: "warn", PAID: "ok", COMPLETED: "ok", CANCELLED: "danger" };
 
-  /* ---- Bulk selection ----
+  /* ---- Bulk selection + reordering ----
      "Select" turns a list card into a picker: every row gains a checkbox and
      the card header swaps for the actions that work on what is ticked.
+     "Reorder" does the same for position: every row gains up/down buttons.
      Products, orders and categories all use this, so the three behave the
-     same way and there is one place to fix if they should not. */
-  function selectable({ heading, note, actions, idOf, rowOf, emptyNode }) {
+     same way and there is one place to fix if they should not.
+
+     Reordering has its own mode rather than buttons on every row because the
+     rows are already tight on a phone, and its own mode rather than drag
+     alone because drag is a mouse-only gesture: HTML5 dragstart never fires
+     from a finger, so on a touch device the handle was decoration and there
+     was no other way to reorder. The buttons are also the keyboard path. */
+  function selectable({ heading, note, actions, idOf, rowOf, emptyNode, titleOf, onReorder }) {
     let picking = false;
+    let reordering = false;
     let items = [];
     const chosen = new Set();
+    /* Set to the id whose button should regain focus after the list repaints,
+       so a keyboard or screen-reader user holding "Move up" is not dropped
+       back to the top of the page on every press. */
+    let refocus = null;
 
     const head = el("div", { class: "card-h" });
     const list = el("div", { class: "list" });
@@ -273,11 +285,52 @@
       });
     };
 
+    /* Moving is debounced, not saved per press: holding "Move up" through five
+       positions is one intent and should be one request, not five. */
+    const saveOrder = debounce(() => {
+      if (!onReorder) return;
+      Promise.resolve(onReorder(ids())).catch(e => toast(e.message, "err"));
+    }, 700);
+
+    function move(item, delta) {
+      const from = items.findIndex(x => idOf(x) === idOf(item));
+      const to = from + delta;
+      if (from < 0 || to < 0 || to >= items.length) return;
+      items.splice(to, 0, ...items.splice(from, 1));
+      refocus = { id: idOf(item), delta };
+      paint();
+      saveOrder();
+    }
+
+    const moveControls = item => {
+      const at = items.findIndex(x => idOf(x) === idOf(item));
+      const what = titleOf ? titleOf(item) : "item";
+      const btn = (delta, label, ico, disabled) => el("button", {
+        class: "btn icon ghost sm", disabled,
+        "aria-label": `Move ${what} ${label}`,
+        dataset: { moveId: idOf(item), moveDelta: String(delta) },
+        onclick: () => move(item, delta)
+      }, icon(ico));
+      return el("div", { class: "row", style: "gap:4px" },
+        btn(-1, "up", "chevron-up", at <= 0),
+        btn(1, "down", "chevron-down", at >= items.length - 1));
+    };
+
     function paintHead() {
+      if (reordering) {
+        mount(head, el("h3", {}, "Reorder"),
+          el("div", { class: "row", style: "gap:10px" },
+            el("span", { class: "xs muted" }, "Saved automatically"),
+            el("button", { class: "btn ghost sm", onclick: () => { reordering = false; paint(); } }, "Done")));
+        return;
+      }
       if (!picking) {
         mount(head, el("h3", {}, heading),
-          el("div", { class: "row", style: "gap:10px" },
+          el("div", { class: "row", style: "gap:8px" },
             note ? el("span", { class: "xs muted" }, note) : null,
+            items.length && onReorder
+              ? el("button", { class: "btn ghost sm", onclick: () => { reordering = true; paint(); } }, "Reorder")
+              : null,
             items.length
               ? el("button", { class: "btn ghost sm", onclick: () => { picking = true; paint(); } }, "Select")
               : null));
@@ -300,19 +353,31 @@
             "Cancel")));
     }
 
-    const paintList = () => mount(list,
-      ...(items.length ? items.map(it => rowOf(it, { picking, checkbox })) : [emptyNode]));
+    const paintList = () => {
+      mount(list, ...(items.length
+        ? items.map(it => rowOf(it, { picking, checkbox, reordering, moveControls }))
+        : [emptyNode]));
+      if (!refocus) return;
+      /* Put focus back on the same control of the row that just moved. If it
+         reached an end its button is now disabled, so fall back to the other
+         direction rather than losing focus entirely. */
+      const pick = d => list.querySelector(
+        `[data-move-id="${CSS.escape(refocus.id)}"][data-move-delta="${d}"]:not([disabled])`);
+      (pick(refocus.delta) || pick(String(-refocus.delta)))?.focus();
+      refocus = null;
+    };
     const paint = () => { paintHead(); paintList(); };
 
     return {
       card, list,
       get picking() { return picking; },
+      get reordering() { return reordering; },
       set(next) {
         items = next || [];
         /* A row that has gone away cannot stay ticked. */
         const live = new Set(ids());
         chosen.forEach(id => live.has(id) || chosen.delete(id));
-        if (!items.length) picking = false;
+        if (!items.length) { picking = false; reordering = false; }
         paint();
       }
     };
@@ -559,15 +624,27 @@
           (p.variant_groups?.length ? ` \u00b7 ${p.variant_groups.length} variant group(s)` : "")))
     ];
 
+    /* selectable() holds the very array passed to set(), so its splices have
+       already reordered `prods` by the time this runs; only the server still
+       needs telling. */
+    const saveOrder = ids => api.storeReorderProducts(ids)
+      .then(() => toast("Order saved", "ok"))
+      .catch(e => { toast(e.message, "err"); throw e; });
+
     const products = selectable({
       heading: "Products",
-      note: "Drag to reorder",
       idOf: p => p.product_id,
+      titleOf: p => p.name,
+      onReorder: saveOrder,
       emptyNode: empty(icon("package"), "No products yet", "Add your first product to open for business."),
       rowOf: (p, ctx) => ctx.picking
         /* Dragging and ticking fight over the same pointer gesture, so rows
            stop being draggable while a selection is being made. */
         ? el("label", { class: "list-item" }, ctx.checkbox(p), ...productBody(p))
+        /* Reorder mode drops the trailing Edit button: the row is already
+           tight on a phone and editing is not what this mode is for. */
+        : ctx.reordering
+        ? el("div", { class: "list-item" }, ...productBody(p), ctx.moveControls(p))
         : el("div", { class: "list-item", draggable: "true", dataset: { sortId: p.product_id } },
             el("span", { class: "drag-handle" }, icon("drag")),
             ...productBody(p),
@@ -598,9 +675,10 @@
     products.set(prods);
     /* sortable() delegates from the list container, so it is attached once and
        keeps working across repaints. Rows carry no data-sort-id while a
-       selection is being made, so dragging is simply inert there. */
-    sortable(products.list, ids => api.storeReorderProducts(ids)
-      .then(() => toast("Order saved", "ok")).catch(e => toast(e.message, "err")));
+       selection is being made or while reordering by button, so dragging is
+       simply inert there. Drag stays for mouse users; the Reorder mode above
+       is the touch and keyboard path to the same thing. */
+    sortable(products.list, ids => saveOrder(ids).catch(() => {}));
 
     function moveProducts(ids) {
       const sel = el("select", { class: "select" },

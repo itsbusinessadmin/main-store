@@ -272,6 +272,11 @@ code{font-family:var(--mono); font-size:.92em}
    long name squeezed them to 25px wide on a 320px phone -- round buttons that
    were the right height and nowhere near wide enough to hit. */
 .btn.icon{width:var(--tap); min-height:var(--tap); padding:0; border-radius:50%; flex:0 0 auto}
+/* A round glyph button in a dense row (the reorder arrows). .btn.sm sets the
+   height; without this the width would stay at the full 44px tap size and two
+   of them would not fit beside a product name on a phone. */
+.btn.icon.sm{width:36px}
+.btn.icon.sm .i{width:18px; height:18px}
 /* A bare glyph in a bar is an iOS nav-bar button: tinted, no chrome at all
    until you touch it. */
 .btn.icon.ghost{background:transparent; border-color:transparent; color:var(--text)}
@@ -725,6 +730,9 @@ label.list-item:has(input:checked){background:var(--brand-050)}
   /* .btn.sm is 34px, which is right for a dense desktop list but short of a
      finger. Only touch devices pay the extra height. */
   .btn.sm{min-height:44px}
+  /* Same for the round ones: the reorder arrows are the whole point of the
+     touch reorder path, so they have to be a full 44x44 under a finger. */
+  .btn.icon.sm{width:44px}
   /* Native checkboxes render ~13px. The surrounding label is tappable, but the
      box itself should be hittable too. */
   input[type="checkbox"],input[type="radio"]{width:22px; height:22px; flex:0 0 auto}
