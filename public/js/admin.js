@@ -231,8 +231,15 @@
   }
 
   /* ================= Dashboard ================= */
-  const shopLink = () =>
-    `${location.origin}${location.pathname.replace(/admin\.html$/, "index.html")}?store=${S.store.public_store_id}`;
+  /* Prefer the short link: the custom name if the merchant set one, otherwise
+     the store number. The long ?store= form is only a fallback for a store
+     that predates numbering. */
+  const shopLink = () => {
+    const ref = S.store.slug || S.store.store_no;
+    return ref
+      ? `${location.origin}/${ref}`
+      : `${location.origin}/index.html?store=${S.store.public_store_id}`;
+  };
 
   const STATUS_TONE = { PENDING: "warn", UNPAID: "warn", PAID: "info", COMPLETED: "ok", CANCELLED: "danger" };
 
@@ -240,6 +247,40 @@
     el("div", { class: "k" }, k),
     el("div", { class: "v" + (small ? " sm" : "") }, v),
     sub ? el("div", { class: "d" }, sub) : null);
+
+  /* Lets the merchant claim a readable link. The number always works, so this
+     is never a step they are blocked on. */
+  function editSlug() {
+    const input = el("input", { class: "input", value: S.store.slug || "",
+      placeholder: "your-shop-name", autocomplete: "off",
+      style: "text-transform:lowercase" });
+    const preview = el("div", { class: "hint mt" });
+    const paint = () => {
+      const v = input.value.trim().toLowerCase();
+      preview.textContent = `${location.origin}/${v || S.store.store_no || "…"}`;
+    };
+    input.oninput = paint; paint();
+
+    const save = el("button", { class: "btn primary" }, "Save name");
+    const mm = modal({
+      title: "Your shop link", wide: false,
+      body: el("div", {},
+        el("p", { class: "muted" },
+          `Your shop always works at ${location.origin}/${S.store.store_no || "…"}. You can also claim a name that is easier to say out loud.`),
+        el("div", { class: "field mt" }, el("label", {}, "Shop name in the link"), input, preview),
+        el("div", { class: "hint mt" }, "Letters, numbers and hyphens. 2–32 characters. Leave it empty to use your number only.")),
+      footer: save
+    });
+    save.onclick = async () => {
+      save.disabled = true;
+      try {
+        const r = await api.storeSetSlug(input.value.trim().toLowerCase());
+        S.store.slug = r.slug; S.store.store_no = r.store_no;
+        toast(r.slug ? "Shop link updated" : "Shop link reset to your number", "ok");
+        mm.close(); renderSection();
+      } catch (e) { toast(e.message, "err"); save.disabled = false; }
+    };
+  }
 
   async function viewDashboard(m) {
     const d = await api.storeDashboard();
@@ -838,7 +879,11 @@
         el("div", { class: "card flat mono", style: "overflow-wrap:anywhere;font-size:var(--fs-xs)" }, shopLink()),
         el("div", { class: "btn-group mt" },
           el("button", { class: "btn ghost sm", onclick: () => copy(shopLink()) }, "Copy link"),
-          el("a", { class: "btn ghost sm", href: shopLink(), target: "_blank", rel: "noopener" }, "Open storefront")),
+          el("a", { class: "btn ghost sm", href: shopLink(), target: "_blank", rel: "noopener" }, "Open storefront"),
+          el("button", { class: "btn ghost sm", onclick: editSlug }, icon("pencil"), "Change name")),
+        S.store.slug
+          ? el("div", { class: "hint mt" }, `Your number also works: ${location.origin}/${S.store.store_no}`)
+          : el("div", { class: "hint mt" }, "Claim a name to make this easier to share."),
         el("div", { class: "divider" }),
         el("h4", { class: "sec-h" }, "Admin Store ID (private)"),
         el("div", { class: "row between", style: "gap:12px" },

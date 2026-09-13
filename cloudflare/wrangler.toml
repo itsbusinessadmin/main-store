@@ -11,6 +11,15 @@ database_id = "51899490-f529-4631-b5da-d93552ad920d"
 binding = "FILES"
 id = "499cc96ee4294a109d5036921fdcd6b5"
 
+# The site is served by this Worker, so bilihan.shop/7 can be a real URL rather
+# than a redirect. Everything under public/ is published to the web, and nothing
+# else can be: an allow-list by directory, rather than an ignore file whose
+# behaviour would have to be trusted sight unseen.
+[assets]
+directory = "../public"
+binding = "ASSETS"
+run_worker_first = true
+
 [vars]
 MASTER_ADMIN_EMAIL = "itsbusiness.admin@gmail.com"
 GOOGLE_CLIENT_ID = "996370090328-3sukmrf88b4rtcj18dvdhmqulj11jcr3.apps.googleusercontent.com"

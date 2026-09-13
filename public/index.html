@@ -6,11 +6,6 @@
 <meta name="theme-color" content="#f6f7f5">
 <meta name="description" content="Shop this store — browse products, add to cart and check out. No account needed.">
 <title>Store</title>
-<!-- The API and product images live on the Worker origin. Starting DNS and the
-     TLS handshake here overlaps them with CSS and script loading instead of
-     paying for them after customer.js makes its first call. -->
-<link rel="preconnect" href="https://main-store.itsbusiness-admin.workers.dev" crossorigin>
-<link rel="dns-prefetch" href="https://main-store.itsbusiness-admin.workers.dev">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/app.css">
