@@ -2,7 +2,10 @@
    App shell: cache-first (instant loads, works offline).
    API reads:  network-first with a cached fallback.
    Anything non-GET is never cached. */
-const VERSION = "us-v8";
+/* Bump on every release that changes a shell file. The shell is served
+   cache-first, so a returning visitor keeps the cached copy until this string
+   changes, a new worker installs and activate() drops the old cache. */
+const VERSION = "us-v9";
 const SHELL = [
   "index.html", "css/app.css", "js/config.js", "js/icons.js", "js/ui.js", "js/api.js",
   "js/customer.js", "manifest.json", "icons/icon.svg"

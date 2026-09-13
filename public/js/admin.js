@@ -73,7 +73,7 @@
       el("div", { style: "width:min(440px,100%)" },
         el("div", { class: "center mb" },
           el("div", { class: "brandmark", style: "justify-content:center" },
-            el("div", { class: "logo" }, "US"), el("span", {}, "Universal Store")),
+            el("span", {}, "Universal Store")),
           el("p", { class: "muted small mt" }, "Merchant sign-in")),
         el("div", { class: "card" },
           el("div", { class: "field" },
@@ -181,7 +181,6 @@
     if (allowed.includes("wizard") || !allowed.length) { mount(side); mount(tabs); return; }
     mount(side,
       el("div", { class: "brandmark", style: "padding:6px 12px 16px" },
-        el("div", { class: "logo" }, (S.store.business_name || "S").slice(0, 2).toUpperCase()),
         el("span", { class: "truncate" }, S.store.business_name)),
       ...NAV.filter(n => allowed.includes(n.id)).map(n => el("button", {
         class: "nav-item", "aria-current": S.section === n.id ? "page" : null, onclick: () => go(n.id)
@@ -241,7 +240,79 @@
       : `${location.origin}/index.html?store=${S.store.public_store_id}`;
   };
 
-  const STATUS_TONE = { PENDING: "warn", UNPAID: "warn", PAID: "info", COMPLETED: "ok", CANCELLED: "danger" };
+  /* Green means settled, amber means waiting on someone, red means it is off.
+     PAID used to be blue, which read as "information" rather than "confirmed". */
+  const STATUS_TONE = { PENDING: "warn", UNPAID: "warn", PAID: "ok", COMPLETED: "ok", CANCELLED: "danger" };
+
+  /* ---- Bulk selection ----
+     "Select" turns a list card into a picker: every row gains a checkbox and
+     the card header swaps for the actions that work on what is ticked.
+     Products, orders and categories all use this, so the three behave the
+     same way and there is one place to fix if they should not. */
+  function selectable({ heading, note, actions, idOf, rowOf, emptyNode }) {
+    let picking = false;
+    let items = [];
+    const chosen = new Set();
+
+    const head = el("div", { class: "card-h" });
+    const list = el("div", { class: "list" });
+    const card = el("div", { class: "card" }, head, list);
+
+    const ids = () => items.map(idOf).filter(Boolean);
+    const checkbox = item => {
+      const id = idOf(item);
+      return el("input", {
+        type: "checkbox", checked: chosen.has(id), "aria-label": "Select",
+        onchange: e => { e.target.checked ? chosen.add(id) : chosen.delete(id); paintHead(); }
+      });
+    };
+
+    function paintHead() {
+      if (!picking) {
+        mount(head, el("h3", {}, heading),
+          el("div", { class: "row", style: "gap:10px" },
+            note ? el("span", { class: "xs muted" }, note) : null,
+            items.length
+              ? el("button", { class: "btn ghost sm", onclick: () => { picking = true; paint(); } }, "Select")
+              : null));
+        return;
+      }
+      const all = ids();
+      const everything = all.length > 0 && all.every(id => chosen.has(id));
+      mount(head,
+        el("h3", {}, chosen.size ? `${chosen.size} selected` : "Select items"),
+        el("div", { class: "btn-group" },
+          el("button", { class: "btn ghost sm", onclick: () => {
+            if (everything) chosen.clear(); else all.forEach(id => chosen.add(id));
+            paint();
+          } }, everything ? "Clear" : "Select all"),
+          ...actions.map(a => el("button", {
+            class: "btn sm " + (a.cls || "ghost"), disabled: chosen.size === 0,
+            onclick: () => a.run([...chosen])
+          }, a.ico ? icon(a.ico) : null, a.label)),
+          el("button", { class: "btn ghost sm", onclick: () => { picking = false; chosen.clear(); paint(); } },
+            "Cancel")));
+    }
+
+    const paintList = () => mount(list,
+      ...(items.length ? items.map(it => rowOf(it, { picking, checkbox })) : [emptyNode]));
+    const paint = () => { paintHead(); paintList(); };
+
+    return {
+      card, list,
+      get picking() { return picking; },
+      set(next) {
+        items = next || [];
+        /* A row that has gone away cannot stay ticked. */
+        const live = new Set(ids());
+        chosen.forEach(id => live.has(id) || chosen.delete(id));
+        if (!items.length) picking = false;
+        paint();
+      }
+    };
+  }
+
+  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
   const stat = (k, v, sub, small) => el("div", { class: "stat" },
     el("div", { class: "k" }, k),
@@ -320,32 +391,60 @@
         el("div", { class: "card-h" }, el("h3", {}, "Recent orders"),
           el("button", { class: "btn ghost sm", onclick: () => go("orders") }, "View all")),
         d.recent && d.recent.length
-          ? el("div", { class: "list" }, ...d.recent.map(orderRow))
+          ? el("div", { class: "list" }, ...d.recent.map(o => orderRow(o)))
           : empty(icon("receipt"), "No orders yet", "Share your shop link to get your first one.")));
   }
 
-  function orderRow(o) {
-    return el("button", { class: "list-item" + (o.seen ? "" : " unseen"), onclick: () => openOrder(o) },
+  /* The row carries its status on its left edge as well as in the badge, so a
+     column of orders can be read at a glance without stopping on each one. */
+  function orderRow(o, cb) {
+    const tone = STATUS_TONE[o.status] || "";
+    const body = [
       el("div", { class: "grow" },
         el("div", { class: "row between" },
           el("strong", {}, o.order_number),
-          el("span", { class: "badge " + (STATUS_TONE[o.status] || "") }, o.status)),
+          el("span", { class: "badge " + tone }, o.status)),
         el("div", { class: "li-sub truncate" },
           `${o.customer_name} \u00b7 ${o.fulfillment_type} \u00b7 ${dateTimeFmt(o.created_at)}`)),
-      el("div", { class: "bold" }, money(o.total)));
+      el("div", { class: "bold" }, money(o.total))
+    ];
+    const cls = "list-item edge-" + (tone || "none") + (o.seen ? "" : " unseen");
+    return cb
+      ? el("label", { class: cls }, cb, ...body)
+      : el("button", { class: cls, onclick: () => openOrder(o) }, ...body);
   }
 
   /* ================= Orders ================= */
   async function viewOrders(m) {
     let status = "", q = "";
-    const list = el("div", { class: "list" });
+
+    const picker = selectable({
+      heading: "All orders",
+      idOf: o => o.order_id,
+      emptyNode: empty(icon("receipt"), "No orders here", "Try a different filter."),
+      rowOf: (o, ctx) => orderRow(o, ctx.picking ? ctx.checkbox(o) : null),
+      actions: [{
+        label: "Delete", cls: "danger", ico: "trash",
+        run: async ids => {
+          if (!await confirmDialog({
+            title: `Delete ${plural(ids.length, "order")}?`,
+            message: "The orders and everything in them are removed for good. This can't be undone.",
+            confirmText: "Delete", danger: true
+          })) return;
+          try {
+            const r = await api.storeBulkDeleteOrders(ids);
+            toast(`Deleted ${plural(r.deleted, "order")}`, "ok");
+            load();
+          } catch (e) { toast(e.message, "err"); }
+        }
+      }]
+    });
 
     const load = async () => {
-      mount(list, ...skeletons(4, "skel line"));
+      mount(picker.list, ...skeletons(4, "skel line"));
       const r = await api.storeOrders({ status, q });
       S.data.orders = r.items;
-      mount(list, ...(r.items.length ? r.items.map(orderRow)
-        : [empty(icon("receipt"), "No orders here", "Try a different filter.")]));
+      picker.set(r.items);
     };
 
     const chips = el("div", { class: "chips" },
@@ -365,7 +464,7 @@
       el("div", { class: "searchbar mb" }, el("span", { class: "ico" }, icon("search")),
         el("input", { class: "input", placeholder: "Search order no., name or mobile\u2026",
           oninput: debounce(e => { q = e.target.value.trim(); load(); }, 300) })),
-      chips, list);
+      chips, picker.card);
     load();
   }
 
@@ -442,53 +541,130 @@
 
   /* ================= Catalog ================= */
   async function viewCatalog(m) {
-    const [storeData, prodRes] = await Promise.all([
-      api.getStore(S.store.public_store_id).catch(() => null),
-      api.listProducts({ public_store_id: S.store.public_store_id, limit: 500 })
-    ]);
-    const categories = storeData?.categories || [];
-    const prods = prodRes.items || [];
+    /* One admin request instead of two storefront ones. */
+    const { categories = [], products: prods = [] } = await api.storeCatalog();
 
-    const list = el("div", { class: "list" });
-    const paintProducts = () => {
-      mount(list, ...(prods.length ? prods.map(p => el("div", {
-        class: "list-item", draggable: "true", dataset: { sortId: p.product_id }
+    const productBody = p => [
+      img(p.images?.[0], { alt: "", cls: "thumb", fallback: imgFallback(icon("package")) }) || imgFallback(icon("package")),
+      el("div", { class: "grow" },
+        el("div", { class: "li-title truncate" }, p.name),
+        el("div", { class: "li-sub" },
+          `${money(p.price)} \u00b7 ${p.stock > 0 ? p.stock + " in stock" : "Sold out"}` +
+          (p.variant_groups?.length ? ` \u00b7 ${p.variant_groups.length} variant group(s)` : "")))
+    ];
+
+    const products = selectable({
+      heading: "Products",
+      note: "Drag to reorder",
+      idOf: p => p.product_id,
+      emptyNode: empty(icon("package"), "No products yet", "Add your first product to open for business."),
+      rowOf: (p, ctx) => ctx.picking
+        /* Dragging and ticking fight over the same pointer gesture, so rows
+           stop being draggable while a selection is being made. */
+        ? el("label", { class: "list-item" }, ctx.checkbox(p), ...productBody(p))
+        : el("div", { class: "list-item", draggable: "true", dataset: { sortId: p.product_id } },
+            el("span", { class: "drag-handle" }, icon("drag")),
+            ...productBody(p),
+            el("button", { class: "btn ghost sm", onclick: () => editProduct(p) }, icon("pencil"), "Edit")),
+      actions: [
+        {
+          label: "Move to\u2026", ico: "package",
+          run: ids => moveProducts(ids)
+        },
+        {
+          label: "Delete", cls: "danger", ico: "trash",
+          run: async ids => {
+            if (!await confirmDialog({
+              title: `Delete ${plural(ids.length, "product")}?`,
+              message: "They disappear from your storefront straight away. This can't be undone.",
+              confirmText: "Delete", danger: true
+            })) return;
+            try {
+              const r = await api.storeBulkDeleteProducts(ids);
+              toast(`Deleted ${plural(r.deleted, "product")}`, "ok");
+              renderSection();
+            } catch (e) { toast(e.message, "err"); }
+          }
+        }
+      ]
+    });
+
+    products.set(prods);
+    /* sortable() delegates from the list container, so it is attached once and
+       keeps working across repaints. Rows carry no data-sort-id while a
+       selection is being made, so dragging is simply inert there. */
+    sortable(products.list, ids => api.storeReorderProducts(ids)
+      .then(() => toast("Order saved", "ok")).catch(e => toast(e.message, "err")));
+
+    function moveProducts(ids) {
+      const sel = el("select", { class: "select" },
+        ...categories.map(c => el("option", { value: c.category_id }, c.name)));
+      const save = el("button", { class: "btn primary" }, "Move");
+      const mm = modal({
+        title: `Move ${plural(ids.length, "product")}`,
+        body: el("div", { class: "field" }, el("label", {}, "Category"), sel),
+        footer: save
+      });
+      save.onclick = async () => {
+        save.disabled = true;
+        try {
+          const r = await api.storeBulkMoveProducts(ids, sel.value);
+          toast(`Moved ${plural(r.moved, "product")}`, "ok");
+          mm.close(); renderSection();
+        } catch (e) { toast(e.message, "err"); save.disabled = false; }
+      };
+    }
+
+    const cats = selectable({
+      heading: "Categories",
+      idOf: c => c.is_system ? null : c.category_id,
+      emptyNode: empty(icon("package"), "No categories yet", "Group your products to help customers find them."),
+      rowOf: (c, ctx) => {
+        const body = [
+          el("div", { class: "grow" },
+            el("div", { class: "li-title" }, c.name),
+            c.is_system ? el("div", { class: "li-sub" }, "System category \u2014 can't be renamed or deleted") : null)
+        ];
+        /* Uncategorized has nowhere to send its products, so it is shown but
+           never offered a checkbox. */
+        if (ctx.picking) {
+          return c.is_system
+            ? el("div", { class: "list-item muted" }, ...body)
+            : el("label", { class: "list-item" }, ctx.checkbox(c), ...body);
+        }
+        return el("div", { class: "list-item" }, ...body,
+          c.is_system ? null : el("div", { class: "btn-group" },
+            el("button", { class: "btn ghost sm", onclick: () => editCategory(c) }, "Rename"),
+            el("button", { class: "btn ghost sm", onclick: async () => {
+              if (!await confirmDialog({ title: "Delete category?",
+                message: `Products in "${c.name}" will move to Uncategorized.`, confirmText: "Delete", danger: true })) return;
+              await api.storeDeleteCategory(c.category_id); toast("Category deleted", "ok"); renderSection();
+            } }, icon("trash"), "Delete")));
       },
-        el("span", { class: "drag-handle" }, icon("drag")),
-        img(p.images?.[0], { alt: "", cls: "thumb", fallback: imgFallback(icon("package")) }) || imgFallback(icon("package")),
-        el("div", { class: "grow" },
-          el("div", { class: "li-title truncate" }, p.name),
-          el("div", { class: "li-sub" },
-            `${money(p.price)} \u00b7 ${p.stock > 0 ? p.stock + " in stock" : "Sold out"}` +
-            (p.variant_groups?.length ? ` \u00b7 ${p.variant_groups.length} variant group(s)` : ""))),
-        el("button", { class: "btn ghost sm", onclick: () => editProduct(p) }, icon("pencil"), "Edit")))
-        : [empty(icon("package"), "No products yet", "Add your first product to open for business.")]));
-      sortable(list, ids => api.storeReorderProducts(ids)
-        .then(() => toast("Order saved", "ok")).catch(e => toast(e.message, "err")));
-    };
-    paintProducts();
-
-    const catList = el("div", { class: "list" },
-      ...categories.map(c => el("div", { class: "list-item" },
-        el("div", { class: "grow" },
-          el("div", { class: "li-title" }, c.name),
-          c.is_system ? el("div", { class: "li-sub" }, "System category \u2014 can't be renamed or deleted") : null),
-        c.is_system ? null : el("div", { class: "btn-group" },
-          el("button", { class: "btn ghost sm", onclick: () => editCategory(c) }, "Rename"),
-          el("button", { class: "btn ghost sm", onclick: async () => {
-            if (!await confirmDialog({ title: "Delete category?",
-              message: `Products in "${c.name}" will move to Uncategorized.`, confirmText: "Delete", danger: true })) return;
-            await api.storeDeleteCategory(c.category_id); toast("Category deleted", "ok"); renderSection();
-          } }, icon("trash"), "Delete")))));
+      actions: [{
+        label: "Delete", cls: "danger", ico: "trash",
+        run: async ids => {
+          if (!await confirmDialog({
+            title: `Delete ${plural(ids.length, "category")}?`,
+            message: "Products in them move to Uncategorized. The products themselves are kept.",
+            confirmText: "Delete", danger: true
+          })) return;
+          try {
+            const r = await api.storeBulkDeleteCategories(ids);
+            toast(`Deleted ${plural(r.deleted, "category")}`, "ok");
+            renderSection();
+          } catch (e) { toast(e.message, "err"); }
+        }
+      }]
+    });
+    cats.set(categories);
 
     mount(m,
       header("Catalog", `${prods.length} product(s) \u00b7 ${categories.length} categor${categories.length === 1 ? "y" : "ies"}`, [
         el("button", { class: "btn ghost sm", onclick: () => editCategory(null) }, "New category"),
         el("button", { class: "btn primary sm", onclick: () => editProduct(null) }, "New product")]),
-      el("div", { class: "card" },
-        el("div", { class: "card-h" }, el("h3", {}, "Products"), el("span", { class: "xs muted" }, "Drag to reorder")),
-        list),
-      el("div", { class: "card" }, el("div", { class: "card-h" }, el("h3", {}, "Categories")), catList));
+      products.card,
+      cats.card);
 
     function editCategory(c) {
       const input = el("input", { class: "input", value: c?.name || "" });

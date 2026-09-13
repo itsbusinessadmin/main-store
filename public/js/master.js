@@ -63,7 +63,7 @@
       el("div", { style: "width:min(420px,100%)" },
         el("div", { class: "center mb" },
           el("div", { class: "brandmark", style: "justify-content:center" },
-            el("div", { class: "logo" }, "US"), el("span", {}, "Master Admin")),
+            el("span", {}, "Master Admin")),
           el("p", { class: "muted small mt" }, "Platform owner access only")),
         el("div", { class: "card" },
           gBtn,
@@ -125,7 +125,7 @@
   function renderNav() {
     mount($("#sidebar"),
       el("div", { class: "brandmark", style: "padding:6px 12px 16px" },
-        el("div", { class: "logo" }, "US"), el("span", {}, "Master Admin")),
+        el("span", {}, "Master Admin")),
       ...NAV.map(n => el("button", {
         class: "nav-item", "aria-current": S.section === n.id ? "page" : null, onclick: () => go(n.id)
       }, el("span", { class: "ico" }, icon(n.ico)), n.label, alertDot(n.id))),

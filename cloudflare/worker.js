@@ -292,17 +292,6 @@ A.public_place_order = async (env, body) => {
   return { order_id: orderId, order_number: orderNumber };
 };
 
-A.public_track_order = async (env, body) => {
-  const s = await storeByRef(env, body.public_store_id).first();
-  if (!s) bad("Store not found.", "NOT_FOUND", 404);
-  const o = await env.DB.prepare("SELECT * FROM orders WHERE store_id=? AND UPPER(order_number)=UPPER(?)")
-    .bind(s.store_id, String(body.order_number || "").trim()).first();
-  if (!o) bad("We couldn't find an order with that number.", "NOT_FOUND", 404);
-  const items = await env.DB.prepare("SELECT name, variant, qty, price FROM order_items WHERE order_id=?").bind(o.order_id).all();
-  return { order_number: o.order_number, status: o.status, total: o.total, created_at: o.created_at,
-           fulfillment_type: o.fulfillment_type, items: items.results };
-};
-
 A.public_list_plans = async env =>
   (await env.DB.prepare("SELECT * FROM subscription_plans WHERE is_active=1 ORDER BY price").all()).results;
 
@@ -406,6 +395,28 @@ A.store_update_order = async (env, body, ctx) => {
   return { ok: true };
 };
 
+/* The catalog page's own source of truth. It used to call the two public
+   storefront endpoints -- two round trips, six queries, and a payload shaped
+   for shoppers rather than for editing -- and those endpoints refuse a store
+   whose storefront is switched off, which the admin page has no reason to
+   care about. */
+A.store_catalog = async (env, body, ctx) => {
+  const s = requireAccess(await currentStore(env, ctx.req, body), ["FULL_ADMIN", "INITIAL_SETUP"]);
+  const [cats, prods] = await env.DB.batch([
+    env.DB.prepare("SELECT * FROM categories WHERE store_id=? ORDER BY sort").bind(s.store_id),
+    env.DB.prepare("SELECT * FROM products WHERE store_id=? ORDER BY sort, name").bind(s.store_id)
+  ]);
+  return {
+    categories: cats.results,
+    /* p() is the module's JSON-parse helper, so the row is named row here. */
+    products: prods.results.map(row => ({
+      ...row,
+      images: p(row.images, []),
+      variant_groups: p(row.variant_groups, [])
+    }))
+  };
+};
+
 A.store_save_product = async (env, body, ctx) => {
   const s = requireAccess(await currentStore(env, ctx.req, body), ["FULL_ADMIN", "INITIAL_SETUP"]);
   const pr = body.product || {};
@@ -445,6 +456,78 @@ A.store_delete_product = async (env, body, ctx) => {
   const s = requireAccess(await currentStore(env, ctx.req, body), ["FULL_ADMIN"]);
   await env.DB.prepare("DELETE FROM products WHERE product_id=? AND store_id=?").bind(body.product_id, s.store_id).run();
   return { ok: true };
+};
+
+/* ---- Bulk actions ----
+   One request per batch rather than one per row: a merchant clearing fifty
+   sold-out products used to mean fifty round trips, each paying the full
+   auth + store lookup. Every statement is still scoped by store_id, so a
+   forged id from another store simply matches nothing. */
+
+/* A list of ids from the client is untrusted input: cap it so one request
+   cannot ask for an unbounded batch, and drop anything that isn't a
+   non-empty string before it reaches a statement. */
+const idList = (raw, what) => {
+  const ids = [...new Set((Array.isArray(raw) ? raw : []).filter(v => typeof v === "string" && v.trim()))];
+  if (!ids.length) bad(`Select at least one ${what}.`, "VALIDATION");
+  if (ids.length > 500) bad(`That's more than 500 ${what}s at once — please do it in smaller batches.`, "VALIDATION");
+  return ids;
+};
+
+const placeholders = n => Array(n).fill("?").join(",");
+
+A.store_bulk_delete_products = async (env, body, ctx) => {
+  const s = requireAccess(await currentStore(env, ctx.req, body), ["FULL_ADMIN"]);
+  const ids = idList(body.ids, "product");
+  const r = await env.DB.prepare(
+    `DELETE FROM products WHERE store_id=? AND product_id IN (${placeholders(ids.length)})`
+  ).bind(s.store_id, ...ids).run();
+  return { deleted: r.meta.changes };
+};
+
+A.store_bulk_move_products = async (env, body, ctx) => {
+  const s = requireAccess(await currentStore(env, ctx.req, body), ["FULL_ADMIN"]);
+  const ids = idList(body.ids, "product");
+  const cat = await env.DB.prepare("SELECT category_id FROM categories WHERE category_id=? AND store_id=?")
+    .bind(body.category_id, s.store_id).first();
+  if (!cat) bad("That category doesn't exist in this store.", "NOT_FOUND", 404);
+  const r = await env.DB.prepare(
+    `UPDATE products SET category_id=? WHERE store_id=? AND product_id IN (${placeholders(ids.length)})`
+  ).bind(cat.category_id, s.store_id, ...ids).run();
+  return { moved: r.meta.changes };
+};
+
+A.store_bulk_delete_orders = async (env, body, ctx) => {
+  const s = requireAccess(await currentStore(env, ctx.req, body), ["FULL_ADMIN"]);
+  const ids = idList(body.ids, "order");
+  const list = placeholders(ids.length);
+  /* order_items is ON DELETE CASCADE, so the line items go with the order --
+     and meta.changes counts those cascaded rows too, which reported "deleted 4
+     orders" for two orders of two items. Count the orders first instead. */
+  const [found] = await env.DB.batch([
+    env.DB.prepare(`SELECT COUNT(*) AS n FROM orders WHERE store_id=? AND order_id IN (${list})`)
+      .bind(s.store_id, ...ids),
+    env.DB.prepare(`DELETE FROM orders WHERE store_id=? AND order_id IN (${list})`)
+      .bind(s.store_id, ...ids)
+  ]);
+  return { deleted: found.results[0]?.n || 0 };
+};
+
+A.store_bulk_delete_categories = async (env, body, ctx) => {
+  const s = requireAccess(await currentStore(env, ctx.req, body), ["FULL_ADMIN"]);
+  const ids = idList(body.ids, "category");
+  const fallback = await env.DB.prepare("SELECT category_id FROM categories WHERE store_id=? AND is_system=1")
+    .bind(s.store_id).first();
+  /* Uncategorized is where orphaned products land, so it can never be one of
+     the things deleted -- excluded in SQL rather than trusted from the client. */
+  const list = placeholders(ids.length);
+  const [moved, deleted] = await env.DB.batch([
+    env.DB.prepare(`UPDATE products SET category_id=? WHERE store_id=? AND category_id IN (${list})`)
+      .bind(fallback?.category_id || null, s.store_id, ...ids),
+    env.DB.prepare(`DELETE FROM categories WHERE store_id=? AND is_system=0 AND category_id IN (${list})`)
+      .bind(s.store_id, ...ids)
+  ]);
+  return { deleted: deleted.meta.changes, moved: moved.meta.changes };
 };
 
 A.store_reorder_products = async (env, body, ctx) => {

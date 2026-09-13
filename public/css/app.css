@@ -554,7 +554,20 @@ tbody tr:hover{background:var(--card-2)}
 .list-item:hover{border-color:var(--brand); transform:translateY(-1px); box-shadow:var(--shadow-sm)}
 .list-item.selected{border-color:var(--brand); background:var(--brand-050)}
 .list-item .thumb{width:52px;height:52px}
+/* A status colour on the leading edge, so a column of rows can be scanned
+   without reading every badge: green settled, amber waiting, red stopped. */
+.list-item.edge-ok{border-left:3px solid var(--ok)}
+.list-item.edge-warn{border-left:3px solid var(--warn)}
+.list-item.edge-danger{border-left:3px solid var(--danger)}
+.list-item.edge-info{border-left:3px solid var(--info)}
+.list-item.edge-none{border-left:3px solid var(--line-strong)}
+/* An unread order still wins: it is the one row that wants attention now. */
 .list-item.unseen{border-left:3px solid var(--brand)}
+/* Checkbox rows. The row is the label, so the whole width is the tick target
+   rather than the 22px box. */
+.list-item > input[type="checkbox"]{margin:0 2px 0 0; flex:0 0 auto; cursor:pointer}
+label.list-item{cursor:pointer}
+label.list-item:has(input:checked){background:var(--brand-050); border-color:var(--brand)}
 .drag-handle{cursor:grab; color:var(--muted); padding:6px; touch-action:none}
 .list-item.dragging{opacity:.45}
 .li-title{font-weight:650; line-height:1.35}
@@ -694,11 +707,13 @@ html{scroll-padding-top:76px}
    an empty cart too; the count rides the corner of the icon only once there is
    something in it. */
 .cart-btn{position:relative; overflow:visible}
+/* Clear of the icon, not on top of it: the badge is pushed past the button's
+   own edge so the cart glyph underneath stays whole. */
 .cart-btn .count{
-  position:absolute; top:-1px; right:-1px; min-width:19px; height:19px; padding:0 5px;
+  position:absolute; top:-3px; right:-3px; min-width:16px; height:16px; padding:0 4px;
   border-radius:var(--r-pill); background:var(--brand); color:var(--brand-ink);
-  font-size:11px; font-weight:700; line-height:19px; text-align:center;
-  border:2px solid var(--card); box-sizing:content-box;
+  font-size:10px; font-weight:700; line-height:16px; text-align:center;
+  border:2px solid var(--bg); box-sizing:content-box; pointer-events:none;
 }
 .cart-btn .count[hidden]{display:none}
 
