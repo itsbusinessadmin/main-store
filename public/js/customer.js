@@ -68,13 +68,6 @@
     renderCartCount();
   }
 
-  /* The tidiest link this store has: its custom name, then its number, then
-     the original query-string form as a fallback. */
-  function shortLink() {
-    const ref = S.store?.slug || S.store?.store_no;
-    return ref ? `${location.origin}/${ref}` : location.href;
-  }
-
   function fatal(title, msg) {
     $("#splash").classList.add("gone");
     /* Hide the header/hero before wiping #app's contents below — #storeHeader
@@ -231,10 +224,18 @@
     if (!document.hidden) start();
   }
 
+  /* "Uncategorized" is where the admin parks products that have not been filed
+     yet -- it is bookkeeping, not a category a shopper chose to browse. With it
+     hidden, a store that has never made a category has nothing to filter by, so
+     the whole row goes rather than leaving a lone "All" chip. */
   function renderCategories() {
-    mount($("#categories"),
+    const host = $("#categories");
+    const cats = (S.store.categories || []).filter(c => !c.is_system);
+    host.hidden = cats.length === 0;
+    if (host.hidden) return mount(host);
+    mount(host,
       el("button", { class: "chip on", "data-cat": "", "aria-pressed": "true", onclick: onCat }, "All"),
-      ...(S.store.categories || []).map(c =>
+      ...cats.map(c =>
         el("button", { class: "chip", "data-cat": c.category_id, "aria-pressed": "false", onclick: onCat }, c.name)));
   }
 
@@ -392,7 +393,6 @@
       };
 
     const priceEl = el("div", { class: "bold", style: "font-size:1.35rem;color:var(--brand)" }, money(p.price));
-    const nEl = el("span", { class: "n" }, "1");
     const addBtn = el("button", { class: "btn primary block lg add-cart" }, icon("cart-plus"), "Add to cart");
 
     // Before the customer has clicked anything, preview using only the primary
@@ -441,13 +441,7 @@
         }
       }, o)))));
 
-    const stepper = el("div", { class: "stepper" },
-      el("button", { "aria-label": "Decrease", onclick: () => { qty = Math.max(1, qty - 1); nEl.textContent = qty; refresh(); } }, icon("minus-circle")),
-      nEl,
-      el("button", { "aria-label": "Increase", onclick: () => {
-        if (qty >= p.stock) return toast(`Only ${p.stock} in stock.`);
-        qty++; nEl.textContent = qty; refresh();
-      } }, icon("plus-circle")));
+    const stepper = qtyStepper(qty, n => { qty = n; refresh(); }, { min: 1, max: p.stock });
 
     const m = modal({
       title: p.name,
@@ -475,12 +469,32 @@
         S.cart.push({
           key, product_id: p.product_id, name: p.name,
           variant, variantLabel,
-          price: livePrice(), qty,
+          price: livePrice(), qty, stock: p.stock,
           image: p.images?.[0] || ""      /* store the id, resolve at render time */
         });
       }
       persistCart(); m.close(); toast("Added to cart", "ok");
     };
+  }
+
+  /* ---------------- Quantity ---------------- */
+  /* One stepper for the product sheet and the cart. min 0 means the minus
+     button can empty a cart line, which is what makes the bin and the minus
+     button agree; the product sheet passes min 1 because there is nothing to
+     remove there yet. */
+  function qtyStepper(value, onChange, { min = 1, max = Infinity } = {}) {
+    const nEl = el("span", { class: "n", "aria-live": "polite" }, value);
+    const set = next => {
+      if (next > max) return toast(`Only ${max} in stock.`);
+      if (next < min) return;
+      value = next;
+      nEl.textContent = value;
+      onChange(value);
+    };
+    return el("div", { class: "stepper" },
+      el("button", { type: "button", "aria-label": "Decrease", onclick: () => set(value - 1) }, icon("minus-circle")),
+      nEl,
+      el("button", { type: "button", "aria-label": "Increase", onclick: () => set(value + 1) }, icon("plus-circle")));
   }
 
   /* ---------------- Cart ---------------- */
@@ -503,6 +517,17 @@
     const body = el("div");
     const checkoutBtn = el("button", { class: "btn primary block lg" }, "Checkout");
 
+    /* One path for every quantity change, including removal: dropping to zero
+       is the same thing as taking the line out, so the minus button and the
+       bin agree by construction rather than by two similar blocks of code. */
+    const setQty = (line, next) => {
+      if (next > 0) line.qty = next;
+      else S.cart = S.cart.filter(x => x.key !== line.key);
+      persistCart();
+      if (S.cart.length) paint();
+      else { m.close(); toast("Cart cleared"); }
+    };
+
     const paint = () => {
       mount(body,
         ...S.cart.map(l => el("div", { class: "cart-line" },
@@ -510,12 +535,13 @@
           el("div", { class: "grow" },
             el("div", { class: "bold" }, l.name),
             l.variantLabel ? el("div", { class: "xs muted" }, l.variantLabel) : null,
-            el("div", { class: "small muted" }, `${money(l.price)} \u00d7 ${l.qty}`),
-            el("button", { class: "btn link xs", onclick: () => {
-              S.cart = S.cart.filter(x => x.key !== l.key);
-              persistCart();
-              if (S.cart.length) paint(); else { m.close(); toast("Cart cleared"); }
-            } }, icon("trash", { size: 14 }), "Remove")),
+            el("div", { class: "xs muted" }, money(l.price) + " each"),
+            el("div", { class: "row", style: "gap:10px;margin-top:6px" },
+              qtyStepper(l.qty, next => setQty(l, next), { min: 0, max: l.stock ?? Infinity }),
+              el("button", {
+                class: "btn icon ghost sm", "aria-label": `Remove ${l.name}`, title: "Remove",
+                onclick: () => setQty(l, 0)
+              }, icon("trash", { size: 16 })))),
           el("div", { class: "bold" }, money(l.price * l.qty)))),
         el("div", { class: "totals" },
           el("div", { class: "t-row" }, el("span", {}, "Subtotal"), el("span", {}, money(cartSubtotal()))),
@@ -748,30 +774,10 @@
     setStep(1);
   }
 
-  /* ---------------- Store info ---------------- */
-  function openInfo() {
-    modal({
-      title: S.store.business_name,
-      body: el("div", {},
-        S.store.tagline ? el("p", { class: "muted" }, S.store.tagline) : null,
-        (S.store.contact || []).length
-          ? el("div", { class: "card flat" },
-              el("h4", { class: "sec-h" }, "Contact"),
-              dl(...S.store.contact.map(c => dlRow(
-                /phone|mobile|tel|viber|whatsapp|call/i.test(c.type || "")
-                  ? el("span", { class: "row", style: "gap:6px" }, icon("phone", { size: 15 }), c.type)
-                  : c.type,
-                c.value))))
-          : null,
-        el("button", { class: "btn ghost block", onclick: () => copy(shortLink()) }, "Copy storefront link"))
-    });
-  }
-
   /* ---------------- Events ---------------- */
   function wireEvents() {
     $("#search").addEventListener("input", debounce(e => { S.q = e.target.value.trim(); loadProducts(true); }, 300));
     $("#cartBtn").onclick = openCart;
-    $("#infoBtn").onclick = openInfo;
     $("#themeBtn").onclick = () => theme.toggle();
     $("#viewToggle").onclick = e => {
       S.view = S.view === "grid" ? "list" : "grid";

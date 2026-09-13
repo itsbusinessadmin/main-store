@@ -333,6 +333,47 @@
       db.products = db.products.filter(p => !(p.product_id === product_id && p.store_id === s.store_id));
       save(); return { ok: true };
     },
+    store_catalog: (_b, api) => {
+      const s = requireFullAdmin(api);
+      return {
+        categories: db.categories.filter(c => c.store_id === s.store_id).sort((a, b) => a.sort - b.sort),
+        products: db.products.filter(p => p.store_id === s.store_id).sort((a, b) => a.sort - b.sort)
+      };
+    },
+    store_bulk_delete_products: ({ ids }, api) => {
+      const s = requireFullAdmin(api);
+      const set = new Set(ids || []);
+      const before = db.products.length;
+      db.products = db.products.filter(p => !(set.has(p.product_id) && p.store_id === s.store_id));
+      save(); return { deleted: before - db.products.length };
+    },
+    store_bulk_move_products: ({ ids, category_id }, api) => {
+      const s = requireFullAdmin(api);
+      const set = new Set(ids || []);
+      let moved = 0;
+      db.products.forEach(p => {
+        if (set.has(p.product_id) && p.store_id === s.store_id) { p.category_id = category_id; moved++; }
+      });
+      save(); return { moved };
+    },
+    store_bulk_delete_orders: ({ ids }, api) => {
+      const s = requireFullAdmin(api);
+      const set = new Set(ids || []);
+      const before = db.orders.length;
+      db.orders = db.orders.filter(o => !(set.has(o.order_id) && o.store_id === s.store_id));
+      save(); return { deleted: before - db.orders.length };
+    },
+    store_bulk_delete_categories: ({ ids }, api) => {
+      const s = requireFullAdmin(api);
+      const set = new Set(ids || []);
+      const fallback = db.categories.find(x => x.store_id === s.store_id && x.is_system);
+      const gone = db.categories.filter(c => set.has(c.category_id) && !c.is_system && c.store_id === s.store_id);
+      const goneIds = new Set(gone.map(c => c.category_id));
+      let moved = 0;
+      db.products.forEach(p => { if (goneIds.has(p.category_id)) { p.category_id = fallback?.category_id || null; moved++; } });
+      db.categories = db.categories.filter(c => !goneIds.has(c.category_id));
+      save(); return { deleted: gone.length, moved };
+    },
     store_reorder_products: ({ ids }, api) => {
       requireFullAdmin(api);
       ids.forEach((id, i) => { const p = db.products.find(x => x.product_id === id); if (p) p.sort = i; });
