@@ -43,7 +43,7 @@
      decorative by default (aria-hidden), because in this app every one of
      them sits next to a text label or on a button that already carries an
      aria-label. Pass {label} for the rare standalone case. */
-  function icon(name, { size = null, cls = "", label = null, width = 2 } = {}) {
+  function icon(name, { size = null, cls = "", label = null, width = 1.8 } = {}) {
     const body = w.US_ICONS?.[name];
     if (!body) return null;
     const host = el("div");
@@ -51,7 +51,11 @@
       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${width}" ` +
       `stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
     const svg = host.firstElementChild;
-    svg.setAttribute("class", "i" + (cls ? " " + cls : ""));
+    /* "*-fill" names are solid silhouettes, not outlines. The .fill class is
+       what flips the SVG from stroked to filled, so it is added here rather
+       than expected at every call site. */
+    const filled = name.endsWith("-fill");
+    svg.setAttribute("class", "i" + (filled ? " fill" : "") + (cls ? " " + cls : ""));
     if (size) { svg.style.width = size + "px"; svg.style.height = size + "px"; }
     if (label) { svg.setAttribute("role", "img"); svg.setAttribute("aria-label", label); }
     else svg.setAttribute("aria-hidden", "true");
@@ -116,7 +120,31 @@
   };
 
   /* ---------- Theme ---------- */
+  /* Relative luminance, WCAG's own formula. Used both to pick the text that
+     sits on the brand colour and to decide whether that colour is dark enough
+     to vanish against a black page. */
+  function relLuminance(hex) {
+    const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(hex).trim());
+    if (!m) return null;
+    const h = m[1].length === 3 ? m[1].replace(/./g, c => c + c) : m[1];
+    const chan = i => {
+      const c = parseInt(h.slice(i, i + 2), 16) / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    };
+    return { lum: 0.2126 * chan(0) + 0.7152 * chan(2) + 0.0722 * chan(4), hex: "#" + h };
+  }
+
+  /* Mixes a colour toward white by `amount` (0-1), keeping its hue. */
+  function lighten(hex, amount) {
+    const h = hex.slice(1);
+    const mix = i => Math.round(parseInt(h.slice(i, i + 2), 16) + (255 - parseInt(h.slice(i, i + 2), 16)) * amount);
+    return "#" + [0, 2, 4].map(i => mix(i).toString(16).padStart(2, "0")).join("");
+  }
+
   const theme = {
+    /* The merchant's raw choice, kept so a mode switch can re-derive the
+       shade it needs instead of permanently overwriting it. */
+    _accent: null,
     init() {
       const saved = store.get("colorMode");
       this.apply(saved || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
@@ -125,7 +153,7 @@
       document.documentElement.setAttribute("data-color-mode", mode);
       store.set("colorMode", mode);
       const meta = $('meta[name="theme-color"]');
-      if (meta) meta.content = mode === "dark" ? "#0e120f" : "#f6f7f5";
+      if (meta) meta.content = mode === "dark" ? "#000000" : "#f2f2f7";
       $$("[data-theme-toggle]").forEach(b => {
         mount(b, icon(mode === "dark" ? "sun" : "moon"));
         /* Only the standalone icon buttons take the label; the sidebar rows
@@ -133,6 +161,9 @@
         if (b.tagName === "BUTTON")
           b.setAttribute("aria-label", mode === "dark" ? "Switch to light mode" : "Switch to dark mode");
       });
+      /* The brand shade is mode-dependent, so it has to be recomputed here and
+         not just when the merchant's colour first arrives. */
+      this.accent();
     },
     toggle() {
       this.apply(document.documentElement.getAttribute("data-color-mode") === "dark" ? "light" : "dark");
@@ -144,17 +175,24 @@
        colour's own relative luminance (WCAG's own formula) rather than assumed
        to be white. */
     accent(hex) {
-      if (!hex) return;
+      if (hex) this._accent = hex;
+      if (!this._accent) return;
       const root = document.documentElement;
-      root.style.setProperty("--brand", hex);
-      const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
-      if (!m) return;
-      const h = m[1].length === 3 ? m[1].replace(/./g, c => c + c) : m[1];
-      const chan = i => {
-        const c = parseInt(h.slice(i, i + 2), 16) / 255;
-        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-      };
-      const lum = 0.2126 * chan(0) + 0.7152 * chan(2) + 0.0722 * chan(4);
+      const parsed = relLuminance(this._accent);
+      if (!parsed) { root.style.setProperty("--brand", this._accent); return; }
+
+      /* On a black page a very dark brand colour is invisible: the store's own
+         deep green button reads as an unlit rectangle. Lift it toward white,
+         keeping the hue, until it carries as a tint the way iOS system colours
+         do in dark mode. Light mode uses the merchant's colour untouched. */
+      let out = parsed.hex, lum = parsed.lum;
+      if (root.getAttribute("data-color-mode") === "dark") {
+        for (let step = 0; step < 14 && lum < 0.22; step++) {
+          out = lighten(out, 0.09);
+          lum = relLuminance(out).lum;
+        }
+      }
+      root.style.setProperty("--brand", out);
       /* White text clears 4.5:1 up to luminance 0.183, and black clears it from
          0.180 up, so 0.18 is the one crossover where neither side of the switch
          lands below AA. A softer near-black would leave a band of mid-tone
