@@ -22,61 +22,57 @@
      shade below is derived from it with color-mix() instead of being a fixed
      hex, so hover/tint states stay correct for any accent color and in both
      color schemes. */
-  /* Ink is the default primary. A merchant who sets an accent colour still
-     overwrites --brand at runtime and gets it on their buttons; the ink
-     default is what makes an unbranded store look considered rather than
-     generic. */
-  --brand:#17140f;
-  --brand-600:color-mix(in srgb, var(--brand) 86%, white);
-  --brand-700:color-mix(in srgb, var(--brand) 72%, white);
-  --brand-050:color-mix(in srgb, var(--brand) 7%, var(--bg));
-  /* Brass carries every highlight: links, the active category, the one number
-     on a dashboard that wants your attention. 4.5:1 on paper, card and fill. */
-  --accent:#8c6019;
-  --accent-600:color-mix(in srgb, var(--accent) 84%, black);
+  --brand:#173d24;
+  --brand-600:color-mix(in srgb, var(--brand) 84%, black);
+  --brand-700:color-mix(in srgb, var(--brand) 70%, black);
+  --brand-050:color-mix(in srgb, var(--brand) 9%, var(--bg));
+  /* The text that sits ON a --brand surface. A merchant can set --brand to
+     anything, including a pale colour that white text disappears against,
+     so theme.accent() sets this from the colour's own luminance. */
+  --brand-ink:#ffffff;
+  --accent:#caa66b;
+  --accent-600:color-mix(in srgb, var(--accent) 82%, black);
 
   /* ---- Surface ---- */
-  --bg:#faf8f4;
+  --bg:#f7f6f2;
   --card:#ffffff;
-  --card-2:#f1ece3;
-  --card-3:#e9e3d7;
-  --text:#17140f;
-  --muted:#7a7168;
-  --muted-2:#9c9389;
-  --line:#e8e2d8;
-  --line-strong:#d8d0c2;
+  --card-2:#f1f0ea;
+  --card-3:#e9e7de;
+  --text:#191c17;
+  /* Clears 4.5:1 on every surface it sits on -- page, card, card-2 and
+     card-3. The previous #6d7268 was 4.32 on card-2 and 3.98 on card-3. */
+  --muted:#63685e;
+  --muted-2:#9a9d92;
+  --line:#e5e3da;
+  --line-strong:#d3d1c5;
 
   /* ---- Status ---- */
-  --danger:#a83f2c;
-  --danger-bg:#f9ebe7;
+  --danger:#b3422f;
+  --danger-bg:#fbece8;
   /* Darkened from #a8721c, which was 3.68:1 on --warn-bg and failed WCAG AA.
      This clears 4.5:1 on every surface a warn badge can sit on. */
   --warn:#8b5e17;
-  --warn-bg:#f8f0e1;
-  --ok:#1e7a4c;
-  --ok-bg:#e9f3ec;
+  --warn-bg:#faf1e0;
+  --ok:#1f7a4d;
+  --ok-bg:#e7f5ee;
   --info:#2b6cb0;
   --info-bg:#e8f1fb;
 
   /* ---- Shape ---- */
-  /* Near-square. Weight comes from hairline rules and type, not from rounded
-     containers — that is the difference between premium and generic here. */
-  --r-xs:2px;
-  --r-sm:3px;
-  --r:3px;
-  --r-lg:4px;
+  --r-xs:9px;
+  --r-sm:12px;
+  --r:18px;
+  --r-lg:24px;
   --r-pill:999px;
 
   /* ---- Elevation ----
      Distinct tiers instead of one flat shadow token everywhere, plus a
      colored "brand" shadow for primary CTAs. */
-  /* Surfaces sit on the page rather than float above it. Only the two genuinely
-     overlaid things — a sheet and a toast — keep a real shadow. */
-  --shadow-xs:none;
-  --shadow-sm:none;
-  --shadow:none;
-  --shadow-lg:0 24px 60px -28px rgba(23,20,15,.34);
-  --shadow-brand:none;
+  --shadow-xs:0 1px 2px rgba(20,25,18,.05);
+  --shadow-sm:0 2px 8px -4px rgba(20,25,18,.12), 0 1px 2px rgba(20,25,18,.05);
+  --shadow:0 1px 2px rgba(20,25,18,.05), 0 10px 28px -14px rgba(20,25,18,.22);
+  --shadow-lg:0 24px 56px -26px rgba(20,25,18,.32);
+  --shadow-brand:0 8px 18px -10px color-mix(in srgb, var(--brand) 38%, transparent);
 
   /* ---- Motion ----
      Standard ease-out for entrances/layout, a bouncier spring for taps —
@@ -97,11 +93,7 @@
   /* ---- Type ----
      Native OS stack: reads as premium precisely because it isn't a designed
      webfont — it matches the device (SF Pro on Apple, Segoe UI on Windows). */
-  /* Archivo carries the interface, Newsreader the display voice — headings,
-     prices, store names. The fallbacks are chosen for close metrics so the
-     page does not reflow when the webfont lands. */
-  --font:"Archivo", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Helvetica, Arial, sans-serif;
-  --font-display:"Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --font:-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", system-ui, Roboto, Helvetica, Arial, sans-serif;
   --mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --fs-xs:.75rem; --fs-sm:.8125rem; --fs-md:.9375rem; --fs-lg:1.0625rem;
   --fs-xl:clamp(1.25rem,1rem + 1.1vw,1.6rem);
@@ -113,32 +105,31 @@
 [data-color-mode="dark"]{
   /* Darker-than-black near-black, not pure #000; warmer near-white text,
      not pure #fff; a brighter/more saturated brand for contrast on dark. */
-  --bg:#0c0b0a;
-  --card:#171614;
-  --card-2:#221f1b;
-  --card-3:#2c2824;
-  --text:#f4f1ea;
-  --muted:#928a7e;
-  --muted-2:#777069;
-  --line:#2a2724;
-  --line-strong:#3a352f;
-  /* Inverted: the primary action is paper on ink. A merchant accent still
-     overrides --brand and reads correctly against this background. */
-  --brand:#f4f1ea;
-  --brand-600:color-mix(in srgb, var(--brand) 88%, black);
-  --brand-700:color-mix(in srgb, var(--brand) 74%, black);
-  --brand-050:color-mix(in srgb, var(--brand) 12%, var(--bg));
-  --accent:#e0a94e;
-  --accent-600:color-mix(in srgb, var(--accent) 86%, white);
-  --danger:#ee8b77; --danger-bg:#2a1a16;
-  --warn:#e6c164;   --warn-bg:#241e12;
-  --ok:#63c78a;     --ok-bg:#12251a;
+  --bg:#0d100e;
+  --card:#171b17;
+  --card-2:#1d221d;
+  --card-3:#262c25;
+  --text:#eeece4;
+  --muted:#a2a89c;
+  --muted-2:#767c70;
+  --line:#2a2f28;
+  --line-strong:#383f35;
+  --brand:#63c78a;
+  --brand-600:color-mix(in srgb, var(--brand) 82%, white);
+  --brand-700:color-mix(in srgb, var(--brand) 68%, white);
+  --brand-050:color-mix(in srgb, var(--brand) 16%, var(--bg));
+  --brand-ink:#0c130e;
+  --accent:#dcc088;
+  --accent-600:color-mix(in srgb, var(--accent) 85%, white);
+  --danger:#f0897a; --danger-bg:#2c1c1a;
+  --warn:#e6c164;   --warn-bg:#2b2416;
+  --ok:#63c78a;     --ok-bg:#13251a;
   --info:#82b6ea;   --info-bg:#151f2a;
-  --shadow-xs:none;
-  --shadow-sm:none;
-  --shadow:none;
-  --shadow-lg:0 28px 70px -30px rgba(0,0,0,.85);
-  --shadow-brand:none;
+  --shadow-xs:0 1px 2px rgba(0,0,0,.5);
+  --shadow-sm:0 4px 14px -6px rgba(0,0,0,.55);
+  --shadow:0 1px 2px rgba(0,0,0,.45), 0 12px 32px -16px rgba(0,0,0,.75);
+  --shadow-lg:0 32px 76px -28px rgba(0,0,0,.9);
+  --shadow-brand:0 10px 26px -10px color-mix(in srgb, var(--brand) 45%, transparent);
 }
 
 --ring-placeholder{} /* (no-op, keeps a stable insertion point for tooling) */
@@ -156,12 +147,7 @@ img,svg{max-width:100%; display:block}
 button,input,select,textarea{font:inherit; color:inherit}
 button{cursor:pointer; background:none; border:0}
 a{color:var(--brand); text-decoration:none}
-h1,h2,h3,h4{margin:0; line-height:1.18; letter-spacing:-.018em}
-/* Newsreader carries the display voice; the interface stays in Archivo. */
-h1,h2,h3,.stat .v,.p-card .price,.dl-v.price,.t-row.total span{
-  font-family:var(--font-display); font-weight:500;
-}
-h4{font-weight:600; font-size:var(--fs-md)}
+h1,h2,h3,h4{margin:0; line-height:1.22; font-weight:680; letter-spacing:-.017em}
 p{margin:0}
 ul{margin:0; padding:0; list-style:none}
 code{font-family:var(--mono); font-size:.92em}
@@ -201,15 +187,14 @@ code{font-family:var(--mono); font-size:.92em}
 /* ---------- Card ---------- */
 .card{
   background:var(--card); border:1px solid var(--line); border-radius:var(--r);
-  padding:clamp(16px,2.4vw,22px);
-  transition:border-color var(--med) var(--ease);
+  box-shadow:var(--shadow-sm); padding:clamp(16px,2.4vw,22px);
+  transition:box-shadow var(--med) var(--ease), border-color var(--med) var(--ease);
 }
-/* A flat card is a section of the page, not an object on it. */
-.card.flat{background:transparent; border-color:transparent; padding-inline:0}
+.card.flat{box-shadow:none}
 .card + .card{margin-top:14px}
 .card-h{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
 .card-h h3{font-size:var(--fs-lg)}
-.sec-h{font-size:var(--fs-xs); font-weight:600; text-transform:uppercase; letter-spacing:.18em;
+.sec-h{font-size:var(--fs-sm); font-weight:700; text-transform:uppercase; letter-spacing:.06em;
   color:var(--muted); margin:0 0 10px}
 
 /* ---------- Buttons ---------- */
@@ -225,11 +210,7 @@ code{font-family:var(--mono); font-size:.92em}
 .btn:hover{transform:translateY(-1px)}
 .btn:active{transform:scale(.96)}
 .btn[disabled],.btn[aria-disabled="true"]{opacity:.5; pointer-events:none}
-.btn.primary,.btn.danger,.btn.accent{
-  text-transform:uppercase; letter-spacing:.09em; font-size:var(--fs-sm); font-weight:600;
-}
-.btn.primary{background:var(--brand); color:var(--bg); box-shadow:none}
-[data-color-mode="dark"] .btn.primary{color:var(--bg)}
+.btn.primary{background:var(--brand); color:var(--brand-ink); box-shadow:var(--shadow-brand)}
 .btn.primary:hover{background:var(--brand-600)}
 .btn.accent{background:var(--accent); color:#241a08}
 .btn.accent:hover{background:var(--accent-600)}
@@ -273,28 +254,27 @@ code{font-family:var(--mono); font-size:.92em}
 .chips::-webkit-scrollbar{display:none}
 .chips.wrap-{flex-wrap:wrap; overflow:visible}
 .chip{
-  flex:0 0 auto; scroll-snap-align:start; min-height:38px; padding:0 14px;
-  border-radius:var(--r-xs); border:1px solid var(--line); background:transparent;
-  font-size:var(--fs-sm); font-weight:500; color:var(--muted);
+  flex:0 0 auto; scroll-snap-align:start; min-height:38px; padding:0 15px;
+  border-radius:var(--r-pill); border:1px solid var(--line); background:var(--card);
+  font-size:var(--fs-sm); font-weight:600; color:var(--muted);
   transition:background var(--fast) var(--ease), border-color var(--fast) var(--ease),
-    color var(--fast) var(--ease);
+    color var(--fast) var(--ease), transform var(--fast) var(--ease-spring);
   display:inline-flex; align-items:center; gap:6px;
 }
 .chip:hover{color:var(--text); border-color:var(--muted-2)}
 .chip:active{transform:scale(.96)}
-.chip[aria-selected="true"],.chip.on{background:var(--brand); border-color:var(--brand); color:var(--bg)}
-[data-color-mode="dark"] .chip.on,[data-color-mode="dark"] .chip[aria-selected="true"]{color:var(--bg)}
+.chip[aria-selected="true"],.chip.on{background:var(--brand); border-color:var(--brand); color:var(--brand-ink)}
 
 /* ---------- Badges ---------- */
 .badge{
-  display:inline-flex; align-items:center; gap:5px; padding:0; border-radius:0;
-  font-size:var(--fs-xs); font-weight:600; letter-spacing:.14em; text-transform:uppercase;
-  background:transparent; color:var(--muted); border:0; white-space:nowrap;
+  display:inline-flex; align-items:center; gap:5px; padding:4px 11px; border-radius:var(--r-pill);
+  font-size:var(--fs-xs); font-weight:700; letter-spacing:.03em; text-transform:uppercase;
+  background:var(--card-2); color:var(--muted); border:1px solid var(--line); white-space:nowrap;
 }
-.badge.ok{background:transparent; color:var(--ok)}
-.badge.warn{background:transparent; color:var(--warn)}
-.badge.danger{background:transparent; color:var(--danger)}
-.badge.info{background:transparent; color:var(--info)}
+.badge.ok{background:var(--ok-bg); color:var(--ok); border-color:transparent}
+.badge.warn{background:var(--warn-bg); color:var(--warn); border-color:transparent}
+.badge.danger{background:var(--danger-bg); color:var(--danger); border-color:transparent}
+.badge.info{background:var(--info-bg); color:var(--info); border-color:transparent}
 .dot{width:8px;height:8px;border-radius:50%;background:currentColor;flex:0 0 auto}
 
 /* ---------- Notices ---------- */
@@ -470,7 +450,7 @@ code{font-family:var(--mono); font-size:.92em}
 
 /* ---------- Page header ---------- */
 .page-h{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:22px}
-.page-h h1{font-size:var(--fs-2xl); font-family:var(--font-display); font-weight:500; letter-spacing:-.028em}
+.page-h h1{font-size:var(--fs-xl)}
 .page-h .sub{color:var(--muted); font-size:var(--fs-sm); margin-top:2px}
 
 /* ---------- Stats ---------- */
@@ -481,10 +461,9 @@ code{font-family:var(--mono); font-size:.92em}
 .stat{min-width:0}
 @media (min-width:760px){ .stats{grid-template-columns:repeat(4,1fr)} }
 .stats + .stats{margin-top:12px}
-.stat{background:transparent; border:0; border-top:1px solid var(--line); border-radius:0; padding:16px 0 18px}
-.stat .v{font-family:var(--font-display)}
-.stat .k{font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:.14em; color:var(--muted); font-weight:600}
-.stat .v{font-size:var(--fs-2xl); font-weight:500; letter-spacing:-.025em; margin-top:6px; line-height:1.12; overflow-wrap:break-word}
+.stat{background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:18px; box-shadow:var(--shadow-sm)}
+.stat .k{font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:700}
+.stat .v{font-size:var(--fs-2xl); font-weight:700; letter-spacing:-.02em; margin-top:6px; line-height:1.15; overflow-wrap:break-word}
 .stat .v.sm{font-size:var(--fs-lg); line-height:1.35}
 .stat .d{font-size:var(--fs-xs); color:var(--muted); margin-top:5px}
 @media (max-width:420px){
@@ -568,16 +547,15 @@ tbody tr:hover{background:var(--card-2)}
 
 .list{display:flex; flex-direction:column; gap:10px}
 .list-item{
-  display:flex; align-items:center; gap:14px; padding:15px 0; background:transparent;
-  border:0; border-bottom:1px solid var(--line); border-radius:0;
-  transition:background var(--fast) var(--ease);
+  display:flex; align-items:center; gap:14px; padding:14px 16px; background:var(--card);
+  border:1px solid var(--line); border-radius:var(--r-sm);
+  transition:border-color var(--fast) var(--ease), transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
   text-align:left; width:100%;
 }
-.list-item:hover{background:var(--card-2)}
-.list-item.selected{background:var(--brand-050)}
+.list-item:hover{border-color:var(--brand); transform:translateY(-1px); box-shadow:var(--shadow-sm)}
+.list-item.selected{border-color:var(--brand); background:var(--brand-050)}
 .list-item .thumb{width:52px;height:52px}
-/* An unread order is marked, not shouted at: a thin accent rule, not a slab. */
-.list-item.unseen{box-shadow:inset 2px 0 0 var(--accent); padding-left:14px}
+.list-item.unseen{border-left:3px solid var(--brand)}
 .drag-handle{cursor:grab; color:var(--muted); padding:6px; touch-action:none}
 .list-item.dragging{opacity:.45}
 .li-title{font-weight:650; line-height:1.35}
@@ -606,12 +584,11 @@ tbody tr:hover{background:var(--card-2)}
 .brandmark{display:flex; align-items:center; gap:12px; min-width:0}
 .store-logo{width:40px;height:40px;border-radius:12px;object-fit:cover;flex:0 0 auto;box-shadow:var(--shadow-sm)}
 
-.nav-links{display:none; gap:26px; background:transparent; padding:0; border-radius:0; flex:0 0 auto}
+.nav-links{display:none; gap:2px; background:var(--card-2); padding:4px; border-radius:var(--r-pill); flex:0 0 auto}
 @media (min-width:760px){ .nav-links{display:flex} }
 .nav-link{
-  padding:6px 0; border-radius:0; font-weight:500; font-size:var(--fs-xs); color:var(--muted);
-  text-transform:uppercase; letter-spacing:.14em;
-  transition:color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+  padding:8px 18px; border-radius:var(--r-pill); font-weight:600; font-size:var(--fs-sm); color:var(--muted);
+  transition:background var(--fast) var(--ease), color var(--fast) var(--ease);
 }
 .nav-link:hover{color:var(--text)}
 
@@ -639,9 +616,8 @@ tbody tr:hover{background:var(--card-2)}
 .nav-link.on{background:var(--card); color:var(--text); box-shadow:var(--shadow-xs)}
 
 .announce{
-  padding:11px 14px; text-align:center; border-radius:0;
-  background:transparent; color:var(--text); border-bottom:1px solid var(--line);
-  font-size:var(--fs-xs); font-weight:600; text-transform:uppercase; letter-spacing:.12em;
+  padding:10px 14px; text-align:center; border-radius:0;
+  background:var(--accent); color:#241a08; font-size:var(--fs-sm); font-weight:600;
 }
 
 .hero{padding:clamp(28px,6vw,64px) 0}
@@ -659,10 +635,9 @@ tbody tr:hover{background:var(--card-2)}
 .hero-sub{color:var(--muted); font-size:var(--fs-lg); margin:18px 0 0; max-width:46ch; line-height:1.6}
 .hero-actions{margin-top:28px}
 .hero-media{
-  position:relative; border-radius:var(--r-sm); overflow:hidden; box-shadow:none;
-  aspect-ratio:4/5; background:var(--card-2);
+  position:relative; border-radius:var(--r-lg); overflow:hidden; box-shadow:var(--shadow-lg);
+  aspect-ratio:4/3; background:var(--card-2);
 }
-@media (max-width:899px){ .hero-media{aspect-ratio:4/3} }
 /* The hero is a full-bleed banner, so it keeps edge-to-edge `cover` framing —
    the contain-plus-backdrop treatment above is only for product photos. */
 /* The arrow wrapper sits between .hero-media and .gallery, so it has to carry
@@ -680,8 +655,8 @@ tbody tr:hover{background:var(--card-2)}
 .hero-media .gal-dots i.on{background:#fff}
 
 .searchbar{position:relative}
-.searchbar .input{padding-left:38px; border-radius:0; background:transparent; border:0; border-bottom:1px solid var(--line)}
-.searchbar .ico{position:absolute; left:2px; top:50%; transform:translateY(-50%); color:var(--muted);
+.searchbar .input{padding-left:42px; border-radius:var(--r-pill); background:var(--card-2)}
+.searchbar .ico{position:absolute; left:15px; top:50%; transform:translateY(-50%); color:var(--muted);
   display:grid; place-items:center; pointer-events:none}
 .searchbar .ico .i{width:18px; height:18px}
 
@@ -698,18 +673,17 @@ html{scroll-padding-top:76px}
 .products[data-view="list"]{grid-template-columns:1fr; gap:10px}
 
 .p-card{
-  background:transparent; border:0; border-radius:0; overflow:visible;
+  background:var(--card); border:1px solid var(--line); border-radius:var(--r); overflow:hidden;
   display:flex; flex-direction:column; text-align:left; position:relative;
-  transition:opacity var(--med) var(--ease);
+  transition:transform var(--med) var(--ease), box-shadow var(--med) var(--ease), border-color var(--med) var(--ease);
 }
-.p-card .img{border-radius:var(--r-sm)}
-.p-card:hover{opacity:.82}
-.p-card:active{opacity:.7}
+.p-card:hover{transform:translateY(-3px); box-shadow:var(--shadow-lg); border-color:color-mix(in srgb, var(--brand) 40%, var(--line))}
+.p-card:active{transform:translateY(-1px) scale(.99)}
 .p-card .img{aspect-ratio:1; width:100%; object-fit:cover; background:var(--card-2)}
 .p-card .img.ph{font-size:30px}
-.p-card .body{padding:11px 0 0; display:flex; flex-direction:column; gap:3px; flex:1}
-.p-card .name{font-family:var(--font-display); font-weight:500; font-size:var(--fs-lg); line-height:1.24; letter-spacing:-.012em}
-.p-card .price{font-weight:500; color:var(--text); font-size:var(--fs-md); margin-top:auto; padding-top:6px}
+.p-card .body{padding:12px 13px 14px; display:flex; flex-direction:column; gap:5px; flex:1}
+.p-card .name{font-weight:600; font-size:var(--fs-md); line-height:1.35}
+.p-card .price{font-weight:750; color:var(--brand); font-size:var(--fs-lg); margin-top:auto; padding-top:4px}
 .p-card .sold-out{
   position:absolute; inset:0; background:color-mix(in srgb,var(--card) 72%,transparent);
   display:grid; place-items:center; font-weight:750; letter-spacing:.06em; text-transform:uppercase; font-size:var(--fs-sm);
@@ -719,11 +693,10 @@ html{scroll-padding-top:76px}
 
 .fab{
   position:fixed; right:16px; bottom:calc(16px + env(safe-area-inset-bottom)); z-index:44;
-  min-height:56px; padding:0 22px; border-radius:var(--r-pill); background:var(--brand); color:#fff;
+  min-height:56px; padding:0 22px; border-radius:var(--r-pill); background:var(--brand); color:var(--brand-ink);
   font-weight:700; box-shadow:var(--shadow-brand), var(--shadow-lg); display:inline-flex; align-items:center; gap:10px;
   transition:transform var(--fast) var(--ease-spring); transform-origin:bottom right;
 }
-[data-color-mode="dark"] .fab{color:#0c130e}
 .fab:hover{transform:translateY(-2px)}
 .fab:active{transform:scale(.95)}
 .fab .i{width:22px; height:22px}
@@ -872,8 +845,7 @@ html{scroll-padding-top:76px}
   background:var(--card-2); border:1px solid var(--line); font-size:var(--fs-sm); font-weight:600; color:var(--muted);
   transition:background var(--fast) var(--ease), border-color var(--fast) var(--ease), color var(--fast) var(--ease);
 }
-.wizard-step.on{background:var(--brand); border-color:var(--brand); color:#fff}
-[data-color-mode="dark"] .wizard-step.on{color:#0c130e}
+.wizard-step.on{background:var(--brand); border-color:var(--brand); color:var(--brand-ink)}
 .wizard-step.done{background:var(--ok-bg); border-color:transparent; color:var(--ok)}
 .wizard-step[data-clickable="1"]{cursor:pointer}
 .wizard-step[data-clickable="1"]:hover{border-color:var(--brand); color:var(--brand); background:var(--brand-050)}
@@ -892,12 +864,3 @@ html{scroll-padding-top:76px}
   body{background:#fff}
   .card{box-shadow:none; border-color:#ccc}
 }
-
-/* ---------- Accent usage ----------
-   The merchant's colour lives here: the one active category, a link, the
-   number on a dashboard that wants attention. Everything structural stays ink. */
-a{color:var(--accent)}
-a:hover{color:var(--accent-600)}
-.btn.link{color:var(--accent)}
-.hero-kicker{color:var(--accent)}
-.nav-link.on{box-shadow:inset 0 -1.5px 0 var(--accent)}

@@ -137,11 +137,30 @@
     toggle() {
       this.apply(document.documentElement.getAttribute("data-color-mode") === "dark" ? "light" : "dark");
     },
-    /* A merchant's colour is an ACCENT, not the primary button. Primary stays
-       ink so every store looks composed regardless of the colour chosen; the
-       merchant's colour carries links, the active category and highlights,
-       which is where it actually reads as theirs. */
-    accent(hex) { if (hex) document.documentElement.style.setProperty("--accent", hex); }
+    /* The merchant's colour IS the primary colour: it drives buttons, the
+       active category and every tint derived from --brand in the stylesheet.
+       The label on top has to follow it -- a pale yellow store would otherwise
+       get white text on a white-ish button -- so --brand-ink is picked from the
+       colour's own relative luminance (WCAG's own formula) rather than assumed
+       to be white. */
+    accent(hex) {
+      if (!hex) return;
+      const root = document.documentElement;
+      root.style.setProperty("--brand", hex);
+      const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
+      if (!m) return;
+      const h = m[1].length === 3 ? m[1].replace(/./g, c => c + c) : m[1];
+      const chan = i => {
+        const c = parseInt(h.slice(i, i + 2), 16) / 255;
+        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+      };
+      const lum = 0.2126 * chan(0) + 0.7152 * chan(2) + 0.0722 * chan(4);
+      /* White text clears 4.5:1 up to luminance 0.183, and black clears it from
+         0.180 up, so 0.18 is the one crossover where neither side of the switch
+         lands below AA. A softer near-black would leave a band of mid-tone
+         colours failing both ways, which is why this is pure black. */
+      root.style.setProperty("--brand-ink", lum > 0.18 ? "#000000" : "#ffffff");
+    }
   };
 
   /* ---------- Toasts ---------- */
