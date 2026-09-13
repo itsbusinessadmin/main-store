@@ -19,6 +19,13 @@ id = "499cc96ee4294a109d5036921fdcd6b5"
 directory = "../public"
 binding = "ASSETS"
 run_worker_first = true
+# Without this, the asset handler's default ("auto-trailing-slash") answers a
+# request for /admin.html with a 307 to /admin, and /index.html with a 307 to
+# /. The Worker asks for those .html files by name, so it was handing those
+# redirects back to the browser: /admin bounced to itself forever, and /1
+# bounced to / and lost the store reference. "none" serves exactly the path
+# asked for, and the PAGE table in worker.js owns every URL -> file mapping.
+html_handling = "none"
 
 [vars]
 MASTER_ADMIN_EMAIL = "itsbusiness.admin@gmail.com"

@@ -1036,21 +1036,23 @@ export default {
        storefront. Anything that isn't an API call is a page. */
     if (env.ASSETS && req.method !== "POST" && !url.searchParams.has("action")) {
       const path = url.pathname.replace(/\/+$/, "");
+      const assetAt = p => env.ASSETS.fetch(new Request(new URL(p, url), req));
 
-      /* Friendly paths for the two admin apps. */
-      const PAGE_ALIAS = { "/admin": "/admin.html", "/master": "/master.html" };
-      if (PAGE_ALIAS[path]) {
-        return env.ASSETS.fetch(new Request(new URL(PAGE_ALIAS[path], url), req));
-      }
+      /* Every page this site serves, by the URL it is served at. The asset
+         handler runs with html_handling = "none" (see wrangler.toml), so these
+         paths are the only thing that maps a URL to an .html file — which is
+         what lets /1 and /admin be real URLs rather than redirects. */
+      const PAGE = { "": "/index.html", "/admin": "/admin.html", "/master": "/master.html" };
+      if (PAGE[path]) return assetAt(PAGE[path]);
 
       /* A single path segment that is not a real file is a store reference:
          /7, /verde or /SHOP-XXXX-XXXX-XXXX. Serve the storefront shell and let
          it read the reference back out of its own URL. */
       const seg = path.slice(1);
       if (seg && !seg.includes("/") && !seg.includes(".")) {
-        const asset = await env.ASSETS.fetch(new Request(new URL(path, url), req));
+        const asset = await assetAt(path);
         if (asset.status === 404) {
-          const shell = await env.ASSETS.fetch(new Request(new URL("/index.html", url), req));
+          const shell = await assetAt("/index.html");
           /* 200, not a redirect: the customer keeps the short URL they were
              given, and the address bar never shows the long one. */
           return new Response(shell.body, {
